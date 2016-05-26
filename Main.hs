@@ -29,6 +29,30 @@ evalStmt env (VarDeclStmt []) = return Nil
 evalStmt env (VarDeclStmt (decl:ds)) =
     varDecl env decl >> evalStmt env (VarDeclStmt ds)
 evalStmt env (ExprStmt expr) = evalExpr env expr
+evalStmt env (IfSingleStmt expr st) = do {
+	v <- evalExpr env expr;
+	if (boolAux v) 
+		then evalStmt env st;
+		else return Nil;
+	--return Nil;
+}
+
+boolAux :: Value -> Bool
+boolAux (Bool x) = x
+boolAux (Int x) = x /= 0
+boolAux (String x) = x /= []
+boolAux (Var x) = x /= []
+boolAux Nil = False
+
+
+{-
+
+evalExpr env (InfixExpr op expr1 expr2) = do
+    v1 <- evalExpr env expr1
+    v2 <- evalExpr env expr2
+    infixOp env op v1 v2
+-}
+
 
 -- Do not touch this one :)
 evaluate :: StateT -> [Statement] -> StateTransformer Value
