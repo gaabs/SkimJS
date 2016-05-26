@@ -14,6 +14,9 @@ evalExpr :: StateT -> Expression -> StateTransformer Value
 evalExpr env (VarRef (Id id)) = stateLookup env id
 evalExpr env (IntLit int) = return $ Int int
 evalExpr env (BoolLit bool) = return $ Bool bool
+evalExpr env (PrefixExpr op expr) = do
+    v <- evalExpr env expr
+    prefixOp env op v
 evalExpr env (InfixExpr op expr1 expr2) = do
     v1 <- evalExpr env expr1
     v2 <- evalExpr env expr2
@@ -24,18 +27,53 @@ evalExpr env (AssignExpr OpAssign (LVar var) expr) = do
     setVar var e
 
 evalStmt :: StateT -> Statement -> StateTransformer Value
+evalStmt env (BlockStmt sts) = evaluate env sts
 evalStmt env EmptyStmt = return Nil
-evalStmt env (VarDeclStmt []) = return Nil
-evalStmt env (VarDeclStmt (decl:ds)) =
-    varDecl env decl >> evalStmt env (VarDeclStmt ds)
 evalStmt env (ExprStmt expr) = evalExpr env expr
+evalStmt env (IfStmt expr st1 st2) = do {
+	v <- evalExpr env expr;
+	if (boolAux v) 
+		then evalStmt env st1;
+		else evalStmt env st2;
+}
 evalStmt env (IfSingleStmt expr st) = do {
 	v <- evalExpr env expr;
 	if (boolAux v) 
 		then evalStmt env st;
 		else return Nil;
-	--return Nil;
 }
+-- SwitchStmt Expression [CaseClause]
+-- WhileStmt Expression Statement
+evalStmt env (WhileStmt expr st) = do {
+	v <- evalExpr env expr;
+	if (boolAux v) 
+		-- n entendi como transformou de StateTransformer Value para StateT
+		then evalStmt env st >> evalStmt env (WhileStmt expr st)
+		else return Nil;
+	
+}
+-- DoWhileStmt Statement Expression
+-- BreakStmt (Maybe Id)
+-- ContinueStmt (Maybe Id)
+-- LabelledStmt Id Statement
+-- ForInStmt ForInInit Expression Statement 
+{-
+ ForStmt ForInit        
+            (Maybe Expression) -- test
+            (Maybe Expression) -- increment
+            Statement          -- body 
+-}
+{-
+TryStmt Statement {-body-} (Maybe CatchClause)
+      (Maybe Statement) {-finally-}
+-}
+-- ThrowStmt Expression
+-- ReturnStmt (Maybe Expression)
+-- WithStmt Expression Statement
+evalStmt env (VarDeclStmt []) = return Nil
+evalStmt env (VarDeclStmt (decl:ds)) =
+    varDecl env decl >> evalStmt env (VarDeclStmt ds)
+-- FunctionStmt Id {-name-} [Id] {-args-} [Statement] {-body-}
 
 boolAux :: Value -> Bool
 boolAux (Bool x) = x
@@ -43,16 +81,6 @@ boolAux (Int x) = x /= 0
 boolAux (String x) = x /= []
 boolAux (Var x) = x /= []
 boolAux Nil = False
-
-
-{-
-
-evalExpr env (InfixExpr op expr1 expr2) = do
-    v1 <- evalExpr env expr1
-    v2 <- evalExpr env expr2
-    infixOp env op v1 v2
--}
-
 
 -- Do not touch this one :)
 evaluate :: StateT -> [Statement] -> StateTransformer Value
@@ -79,6 +107,18 @@ infixOp env OpNEq  (Bool v1) (Bool v2) = return $ Bool $ v1 /= v2
 infixOp env OpLAnd (Bool v1) (Bool v2) = return $ Bool $ v1 && v2
 infixOp env OpLOr  (Bool v1) (Bool v2) = return $ Bool $ v1 || v2
 
+prefixOp :: StateT -> PrefixOp ->  Value -> StateTransformer Value
+prefixOp env PrefixMinus (Int  v) = return $ Int  $ -v
+{-
+data PrefixOp = PrefixLNot -- ^ @!@
+              | PrefixBNot -- ^ @~@
+              | PrefixPlus -- ^ @+@
+              | PrefixMinus -- ^ @-@
+              | PrefixTypeof -- ^ @typeof@
+              | PrefixVoid -- ^ @void@
+              | PrefixDelete -- ^ @delete@
+-}
+
 --
 -- Environment and auxiliary functions
 --
@@ -90,7 +130,7 @@ stateLookup :: StateT -> String -> StateTransformer Value
 stateLookup env var = ST $ \s ->
     -- this way the error won't be skipped by lazy evaluation
     case Map.lookup var (union s env) of
-        Nothing -> error $ "Variable " ++ show var ++ " not defiend."
+        Nothing -> error $ "Variable " ++ show var ++ " not defined."
         Just val -> (val, s)
 
 varDecl :: StateT -> VarDecl -> StateTransformer Value

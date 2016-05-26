@@ -205,9 +205,9 @@ data Statement
   | EmptyStmt -- ^ @;@, spec 12.3
   | ExprStmt Expression -- ^ @expr;@, spec 12.4
   | IfStmt Expression Statement Statement 
-    -- ^ @if (e) stmt@, spec 12.5
-  | IfSingleStmt Expression Statement
     -- ^ @if (e) stmt1 else stmt2@, spec 12.5
+  | IfSingleStmt Expression Statement
+    -- ^ @if (e) stmt@, spec 12.5
   | SwitchStmt Expression [CaseClause]
     -- ^ @switch (e) clauses@, spec 12.11
   | WhileStmt Expression Statement
