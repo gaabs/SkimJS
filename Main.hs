@@ -27,7 +27,7 @@ evalExpr env (AssignExpr OpAssign (LVar var) expr) = do
     setVar var e
 
 evalStmt :: StateT -> Statement -> StateTransformer Value
-evalStmt env (BlockStmt sts) = evaluate env sts
+evalStmt env (BlockStmt sts) = myEvaluate env sts
 evalStmt env EmptyStmt = return Nil
 evalStmt env (ExprStmt expr) = evalExpr env expr
 evalStmt env (IfStmt expr st1 st2) = do {
@@ -42,38 +42,81 @@ evalStmt env (IfSingleStmt expr st) = do {
 		then evalStmt env st;
 		else return Nil;
 }
--- SwitchStmt Expression [CaseClause]
--- WhileStmt Expression Statement
 evalStmt env (WhileStmt expr st) = do {
 	v <- evalExpr env expr;
 	if (boolAux v) 
 		-- n entendi como transformou de StateTransformer Value para StateT
-		then evalStmt env st >> evalStmt env (WhileStmt expr st)
-		else return Nil;
-	
+		then do { 
+		x <- evalStmt env st;
+		if(isBreak x)
+			then return Nil;
+		else evalStmt env (WhileStmt expr st);
+		}
+	else return Nil;
 }
+
 -- DoWhileStmt Statement Expression
--- BreakStmt (Maybe Id)
--- ContinueStmt (Maybe Id)
--- LabelledStmt Id Statement
 -- ForInStmt ForInInit Expression Statement 
-{-
- ForStmt ForInit        
-            (Maybe Expression) -- test
-            (Maybe Expression) -- increment
-            Statement          -- body 
--}
-{-
-TryStmt Statement {-body-} (Maybe CatchClause)
-      (Maybe Statement) {-finally-}
--}
--- ThrowStmt Expression
--- ReturnStmt (Maybe Expression)
--- WithStmt Expression Statement
+-- LabelledStmt Id Statement
+	
+
+evalStmt env (ForStmt init (test) (inc) st) = do {
+	case init of
+		NoInit -> return Nil
+		VarInit l -> evalStmt env (VarDeclStmt l)
+		ExprInit expr -> evalExpr env expr
+	;	
+	case test of
+		Nothing ->	do {x <- evalStmt env st;
+						if (isBreak x)
+							then return Nil;
+						else 
+							case inc of
+								Nothing ->	evalStmt env (ForStmt NoInit (test) (inc) st);
+								Just expr -> do {evalExpr env expr >> evalStmt env (ForStmt NoInit (test) (inc) st)};	
+					};
+		Just expr -> do {
+						v<-evalExpr env expr;
+						if(boolAux v)
+							then do{
+								x <- evalStmt env st;
+								if (isBreak x)
+									then return Nil;
+								else 
+									case inc of
+										Nothing ->	evalStmt env (ForStmt NoInit (test) (inc) st);
+										Just expr -> do {evalExpr env expr >> evalStmt env (ForStmt NoInit (test) (inc) st)};	
+							};
+						else
+							return Nil;
+					};
+	;
+}
+
 evalStmt env (VarDeclStmt []) = return Nil
 evalStmt env (VarDeclStmt (decl:ds)) =
     varDecl env decl >> evalStmt env (VarDeclStmt ds)
+
+
 -- FunctionStmt Id {-name-} [Id] {-args-} [Statement] {-body-}
+--evalStmt env (FunctionStmt (Id nome) (args) stms) = \st -> ST $((FunctionStmt (Id nome) (args) stms), insert nome (FunctionStmt (Id nome) (args) stms) st) 
+
+
+--falta fazer break e continue com label
+myEvaluate :: StateT -> [Statement] -> StateTransformer Value
+myEvaluate st [] = return Nil
+myEvaluate st ((BreakStmt Nothing):sts) = return (String "break")
+myEvaluate st ((ContinueStmt Nothing):sts) = return (String "continue")
+myEvaluate st (s:sts) = evaluate st [s] >> myEvaluate st sts
+
+
+isContinue :: Value -> Bool
+isContinue (String "continue") = True
+isContinue _ = False
+
+isBreak :: Value -> Bool
+isBreak (String "break") = True
+isBreak _ = False
 
 boolAux :: Value -> Bool
 boolAux (Bool x) = x
@@ -158,6 +201,8 @@ instance Monad StateTransformer where
             (ST resF) = f v
         in resF newS
 
+		
+		
 instance Functor StateTransformer where
     fmap = liftM
 
@@ -170,8 +215,7 @@ instance Applicative StateTransformer where
 --
 
 showResult :: (Value, StateT) -> String
-showResult (val, defs) =
-    show val ++ "\n" ++ show (toList $ union defs environment) ++ "\n"
+showResult (val, defs) =    show val ++ "\n" ++ show (toList $ union defs environment) ++ "\n"
 
 getResult :: StateTransformer Value -> (Value, StateT)
 getResult (ST f) = f Map.empty
