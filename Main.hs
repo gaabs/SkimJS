@@ -25,6 +25,14 @@ evalExpr env (AssignExpr OpAssign (LVar var) expr) = do
     stateLookup env var -- crashes if the variable doesn't exist
     e <- evalExpr env expr
     setVar var e
+	
+--evalExpr env (CallExpr Expression [Expression]) 
+	-- falta usar args
+	-- assumi que a Expr é sempre VarRef
+evalExpr env (CallExpr (VarRef (Id name)) args) = do {
+	(Function (Id name) args sts) <- stateLookup env name; -- crashes if the variable doesn't exist
+	evaluate env sts;
+}
 
 evalStmt :: StateT -> Statement -> StateTransformer Value
 evalStmt env (BlockStmt sts) = myEvaluate env sts
@@ -97,9 +105,14 @@ evalStmt env (VarDeclStmt []) = return Nil
 evalStmt env (VarDeclStmt (decl:ds)) =
     varDecl env decl >> evalStmt env (VarDeclStmt ds)
 
+evalStmt env (FunctionStmt (Id name) args sts) = ST $ (\s -> (Function (Id name) args sts, insert name (Function (Id name) args sts) s));
 
--- FunctionStmt Id {-name-} [Id] {-args-} [Statement] {-body-}
---evalStmt env (FunctionStmt (Id nome) (args) stms) = \st -> ST $((FunctionStmt (Id nome) (args) stms), insert nome (FunctionStmt (Id nome) (args) stms) st) 
+{--	 --pq n funciona?
+evalStmt env (FunctionStmt (Id name) args sts) = do {
+	let f = Function (Id name) args sts;
+	ST $ (\s -> (f, insert name f s));
+}
+--}
 
 
 --falta fazer break e continue com label

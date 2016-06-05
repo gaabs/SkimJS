@@ -10,4 +10,9 @@ while (x){
 	x = x - 1;
 	z = z + 1;
 }
+
+function f(){
+	x = 2;
+}
+f();
 z;
