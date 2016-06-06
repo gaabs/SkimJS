@@ -30,19 +30,34 @@ evalExpr env (AssignExpr OpAssign (LVar var) expr) = do
 	-- falta usar args
 	-- assumi que a Expr é sempre VarRef
 	-- escopo de variaveis incorre
-evalExpr env (CallExpr (VarRef (Id name)) args) = do {
-	(Function (Id name) args2 sts) <- stateLookup env name; -- crashes if the variable doesn't exist
-	
+evalExpr env (CallExpr (VarRef (Id name)) exps) = do {
+	(Function (Id name) ids sts) <- stateLookup env name; -- crashes if the variable doesn't exist
+	argsLookup ids env exps;
 	myEvaluate env sts;
+	
 }
 
-argsLookup :: [Expression] -> [Expression] -> Value
-argsLookup [] _ = Nil
-argsLookup [(VarRef (Id name)):exps] [(VarRef (Id name2)):exps2] = do{
-  (val,_) <- myStateLookup env name;
-  case val of 
-	Nil -> Nil
-	otherwise -> Nil
+
+argsLookup :: [Id] -> StateT-> [Expression] -> StateTransformer Value
+argsLookup [] _ _ = return Nil
+argsLookup ((Id local):ids) env ((VarRef (Id parametro)):exps) = do
+	val <- myStateLookup env local
+	x <- myStateLookup env parametro
+	case val of 
+		Nil -> setVar local x
+		otherwise -> do
+			tryToSave val env 0
+			setVar local x	
+	argsLookup ids env exps
+
+tryToSave :: Value->StateT->Int->StateTransformer Value
+tryToSave Nil _ _ = return Nil
+tryToSave v env i = do{
+	val <- myStateLookup env ("temp"++(show i));
+	case val of
+	Nil -> setVar ("temp"++(show i)) v
+	otherwise -> tryToSave v env (i+1)
+	;
 }
 
 myStateLookup :: StateT -> String -> StateTransformer Value
@@ -51,7 +66,7 @@ myStateLookup env var = ST $ \s ->
     case Map.lookup var (union s env) of
         Nothing -> (Nil, s)
         Just val -> (val, s)
-
+	;
 
 evalStmt :: StateT -> Statement -> StateTransformer Value
 evalStmt env (BlockStmt sts) = myEvaluate env sts
@@ -126,15 +141,14 @@ evalStmt env (VarDeclStmt (decl:ds)) =
 
 --evalStmt env (FunctionStmt (Id name) args sts) = ST $ (\s -> (Function (Id name) args sts, insert name (Function (Id name) args sts) s));
 
---{--	 --pq n funciona?
 evalStmt env (FunctionStmt (Id name) args sts) = do {
 	let f = Function (Id name) args sts;
 	in ST $ (\s -> (f, insert name f s));
 }
---}
 
 
 --falta fazer break e continue com label
+--break funciona em qq coisa
 myEvaluate :: StateT -> [Statement] -> StateTransformer Value
 myEvaluate st [] = return Nil
 myEvaluate st ((BreakStmt Nothing):sts) = return (String "break")
