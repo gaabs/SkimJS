@@ -34,21 +34,33 @@ evalExpr env (CallExpr (VarRef (Id name)) exps) = do {
 	(Function (Id name) ids sts) <- stateLookup env name; -- crashes if the variable doesn't exist
 	argsLookup ids env exps;
 	myEvaluate env sts;
-	
+	--apagarTemps env ids;
 }
+{-
+apagarTemps :: StateT->[Id]->StateTransformer Value
+apagarTemps _ [] = return Nil
+apagarTemps env ((Id arg):ids)
+ | -}
+
 
 
 argsLookup :: [Id] -> StateT-> [Expression] -> StateTransformer Value
 argsLookup [] _ _ = return Nil
-argsLookup ((Id local):ids) env ((VarRef (Id parametro)):exps) = do
+argsLookup ((Id local):ids) env (e:exps) = do
+	x <- checkType e env		
 	val <- myStateLookup env local
-	x <- myStateLookup env parametro
 	case val of 
 		Nil -> setVar local x
 		otherwise -> do
 			tryToSave local val env 0
 			setVar local x	
 	argsLookup ids env exps
+
+checkType :: Expression -> StateT -> StateTransformer Value
+checkType (VarRef (Id parametro)) env = myStateLookup env parametro
+checkType (IntLit parametro) _ = return (Int parametro)
+checkType (BoolLit parametro) _ = return (Bool parametro)
+		
 
 tryToSave :: String->Value->StateT->Int->StateTransformer Value
 tryToSave _ Nil _ _ = return Nil
