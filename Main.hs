@@ -29,10 +29,29 @@ evalExpr env (AssignExpr OpAssign (LVar var) expr) = do
 --evalExpr env (CallExpr Expression [Expression]) 
 	-- falta usar args
 	-- assumi que a Expr é sempre VarRef
+	-- escopo de variaveis incorre
 evalExpr env (CallExpr (VarRef (Id name)) args) = do {
-	(Function (Id name) args sts) <- stateLookup env name; -- crashes if the variable doesn't exist
-	evaluate env sts;
+	(Function (Id name) args2 sts) <- stateLookup env name; -- crashes if the variable doesn't exist
+	
+	myEvaluate env sts;
 }
+
+argsLookup :: [Expression] -> [Expression] -> Value
+argsLookup [] _ = Nil
+argsLookup [(VarRef (Id name)):exps] [(VarRef (Id name2)):exps2] = do{
+  (val,_) <- myStateLookup env name;
+  case val of 
+	Nil -> Nil
+	otherwise -> Nil
+}
+
+myStateLookup :: StateT -> String -> StateTransformer Value
+myStateLookup env var = ST $ \s ->
+    -- this way the error won't be skipped by lazy evaluation
+    case Map.lookup var (union s env) of
+        Nothing -> (Nil, s)
+        Just val -> (val, s)
+
 
 evalStmt :: StateT -> Statement -> StateTransformer Value
 evalStmt env (BlockStmt sts) = myEvaluate env sts
@@ -46,7 +65,7 @@ evalStmt env (IfStmt expr st1 st2) = do {
 }
 evalStmt env (IfSingleStmt expr st) = do {
 	v <- evalExpr env expr;
-	if (boolAux v) 
+	if (boolAux v)
 		then evalStmt env st;
 		else return Nil;
 }
@@ -105,12 +124,12 @@ evalStmt env (VarDeclStmt []) = return Nil
 evalStmt env (VarDeclStmt (decl:ds)) =
     varDecl env decl >> evalStmt env (VarDeclStmt ds)
 
-evalStmt env (FunctionStmt (Id name) args sts) = ST $ (\s -> (Function (Id name) args sts, insert name (Function (Id name) args sts) s));
+--evalStmt env (FunctionStmt (Id name) args sts) = ST $ (\s -> (Function (Id name) args sts, insert name (Function (Id name) args sts) s));
 
-{--	 --pq n funciona?
+--{--	 --pq n funciona?
 evalStmt env (FunctionStmt (Id name) args sts) = do {
 	let f = Function (Id name) args sts;
-	ST $ (\s -> (f, insert name f s));
+	in ST $ (\s -> (f, insert name f s));
 }
 --}
 
@@ -120,7 +139,9 @@ myEvaluate :: StateT -> [Statement] -> StateTransformer Value
 myEvaluate st [] = return Nil
 myEvaluate st ((BreakStmt Nothing):sts) = return (String "break")
 myEvaluate st ((ContinueStmt Nothing):sts) = return (String "continue")
-myEvaluate st (s:sts) = evaluate st [s] >> myEvaluate st sts
+myEvaluate st ((ReturnStmt Nothing):sts) = return Nil;
+myEvaluate st ((ReturnStmt (Just expr)) :sts) = evalExpr st expr
+myEvaluate st (s:sts) = evalStmt st s >> myEvaluate st sts
 
 
 isContinue :: Value -> Bool
