@@ -46,17 +46,17 @@ argsLookup ((Id local):ids) env ((VarRef (Id parametro)):exps) = do
 	case val of 
 		Nil -> setVar local x
 		otherwise -> do
-			tryToSave val env 0
+			tryToSave local val env 0
 			setVar local x	
 	argsLookup ids env exps
 
-tryToSave :: Value->StateT->Int->StateTransformer Value
-tryToSave Nil _ _ = return Nil
-tryToSave v env i = do{
-	val <- myStateLookup env ("temp"++(show i));
+tryToSave :: String->Value->StateT->Int->StateTransformer Value
+tryToSave _ Nil _ _ = return Nil
+tryToSave s v env i = do{
+	val <- myStateLookup env (s++"Temp"++(show i));
 	case val of
-	Nil -> setVar ("temp"++(show i)) v
-	otherwise -> tryToSave v env (i+1)
+	Nil -> setVar (s++"Temp"++(show i)) v
+	otherwise -> tryToSave s v env (i+1)
 	;
 }
 
