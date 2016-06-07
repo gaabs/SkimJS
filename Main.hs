@@ -56,8 +56,8 @@ evalExpr env (CallExpr (DotRef (VarRef (Id variavel)) (Id function) ) exps) = do
 	case function of
 		"concat" -> myConcat env x exps
 		"len" -> return $ (myLen env x)
---		"head" -> myHead env x
---		"tail" -> myTail env x
+		"head" -> myHead env x
+		"tail" -> myTail env x
 	;
 }
 
@@ -65,8 +65,8 @@ evalExpr env (DotRef (VarRef (Id variavel)) (Id function) ) = do {
 	x<-stateLookup env variavel;
 	case function of
 		"len" -> return $ (myLen env x)
---		"head" -> myHead env x
---		"tail" -> myTail env x
+		"head" -> myHead env x
+		"tail" -> myTail env x
 	;
 }
 
@@ -88,7 +88,17 @@ myConcat env (String l) (h:exps) = do{
 myLen :: StateT->Value->Value
 myLen env e = Int (count e);
  
+myHead :: StateT->Value->StateTransformer Value
+myHead env (Array []) = return $ (Array [])
+myHead env (Array (e:es)) = return $ e
+myHead env (String []) = return $ (String [])
+myHead env (String (e:es)) = return $ (String [e])
 
+myTail :: StateT->Value->StateTransformer Value
+myTail env (Array []) = return $ (Array [])
+myTail env (Array (e:es)) = return $ (Array es)
+myTail env (String []) = return $ (String [])
+myTail env (String (e:es)) = return $ (String es)
 
 count :: Value->Int
 count (Array []) = 0
