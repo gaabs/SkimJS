@@ -14,6 +14,9 @@ evalExpr :: StateT -> Expression -> StateTransformer Value
 evalExpr env (VarRef (Id id)) = stateLookup env id
 evalExpr env (IntLit int) = return $ Int int
 evalExpr env (BoolLit bool) = return $ Bool bool
+evalExpr env (NullLit) = return $ Nil
+evalExpr env (NumLit double) = return $ Double double
+evalExpr env (ArrayLit exps) = return $ Nil
 evalExpr env (PrefixExpr op expr) = do
     v <- evalExpr env expr
     prefixOp env op v
@@ -25,7 +28,8 @@ evalExpr env (AssignExpr OpAssign (LVar var) expr) = do
     stateLookup env var -- crashes if the variable doesn't exist
     e <- evalExpr env expr
     setVar var e
-	
+
+
 --evalExpr env (CallExpr Expression [Expression]) 
 	-- falta usar args
 	-- assumi que a Expr é sempre VarRef
@@ -47,7 +51,7 @@ apagarTemps env ((Id arg):ids)
 argsLookup :: [Id] -> StateT-> [Expression] -> StateTransformer Value
 argsLookup [] _ _ = return Nil
 argsLookup ((Id local):ids) env (e:exps) = do
-	x <- checkType e env		
+	x <- evalExpr env e		
 	val <- myStateLookup env local
 	case val of 
 		Nil -> setVar local x
@@ -55,12 +59,6 @@ argsLookup ((Id local):ids) env (e:exps) = do
 			tryToSave local val env 0
 			setVar local x	
 	argsLookup ids env exps
-
-checkType :: Expression -> StateT -> StateTransformer Value
-checkType (VarRef (Id parametro)) env = myStateLookup env parametro
-checkType (IntLit parametro) _ = return (Int parametro)
-checkType (BoolLit parametro) _ = return (Bool parametro)
-		
 
 tryToSave :: String->Value->StateT->Int->StateTransformer Value
 tryToSave _ Nil _ _ = return Nil
@@ -101,10 +99,10 @@ evalStmt env (WhileStmt expr st) = do {
 	if (boolAux v) 
 		-- n entendi como transformou de StateTransformer Value para StateT
 		then do { 
-		x <- evalStmt env st;
-		if(isBreak x)
-			then return Nil;
-		else evalStmt env (WhileStmt expr st);
+			x <- evalStmt env st;
+			if(isBreak x)
+				then return Nil;
+			else evalStmt env (WhileStmt expr st);
 		}
 	else return Nil;
 }
@@ -151,8 +149,6 @@ evalStmt env (VarDeclStmt []) = return Nil
 evalStmt env (VarDeclStmt (decl:ds)) =
     varDecl env decl >> evalStmt env (VarDeclStmt ds)
 
---evalStmt env (FunctionStmt (Id name) args sts) = ST $ (\s -> (Function (Id name) args sts, insert name (Function (Id name) args sts) s));
-
 evalStmt env (FunctionStmt (Id name) args sts) = do {
 	let f = Function (Id name) args sts;
 	in ST $ (\s -> (f, insert name f s));
@@ -163,27 +159,36 @@ evalStmt env (FunctionStmt (Id name) args sts) = do {
 --break funciona em qq coisa
 myEvaluate :: StateT -> [Statement] -> StateTransformer Value
 myEvaluate st [] = return Nil
-myEvaluate st ((BreakStmt Nothing):sts) = return (String "break")
-myEvaluate st ((ContinueStmt Nothing):sts) = return (String "continue")
-myEvaluate st ((ReturnStmt Nothing):sts) = return Nil;
+myEvaluate st ((BreakStmt Nothing):sts) = return Break
+myEvaluate st ((ContinueStmt Nothing):sts) = return Continue
+myEvaluate st ((ReturnStmt Nothing):sts) = return Nil
 myEvaluate st ((ReturnStmt (Just expr)) :sts) = evalExpr st expr
-myEvaluate st (s:sts) = evalStmt st s >> myEvaluate st sts
-
+myEvaluate st (s:sts) = do {
+	x <- evalStmt st s;
+	if (isBreak x)
+		then return Break;
+	else myEvaluate st sts
+}
 
 isContinue :: Value -> Bool
-isContinue (String "continue") = True
+isContinue Continue = True
 isContinue _ = False
 
 isBreak :: Value -> Bool
-isBreak (String "break") = True
+isBreak Break = True
 isBreak _ = False
 
+isNil :: Value -> Bool
+isNil Nil = True
+isNil _ = False
+
 boolAux :: Value -> Bool
+boolAux Nil = False
+boolAux Break = False
 boolAux (Bool x) = x
 boolAux (Int x) = x /= 0
 boolAux (String x) = x /= []
 boolAux (Var x) = x /= []
-boolAux Nil = False
 
 -- Do not touch this one :)
 evaluate :: StateT -> [Statement] -> StateTransformer Value
