@@ -37,7 +37,10 @@ evalExpr env (AssignExpr OpAssign (LVar var) expr) = do
 evalExpr env (CallExpr (VarRef (Id name)) exps) = do {
 	(Function (Id name) ids sts) <- stateLookup env name; -- crashes if the variable doesn't exist
 	argsLookup ids env exps;
-	myEvaluate env sts;
+	x <- myEvaluate env sts;
+	if (isReturn x)
+	then return $ getReturn x
+	else myEvaluate env sts
 	--apagarTemps env ids;
 }
 {-
@@ -79,7 +82,8 @@ myStateLookup env var = ST $ \s ->
 	;
 
 evalStmt :: StateT -> Statement -> StateTransformer Value
-evalStmt env (BlockStmt sts) = myEvaluate env sts
+evalStmt env (BlockStmt sts) = myEvaluate env sts; 
+
 evalStmt env EmptyStmt = return Nil
 evalStmt env (ExprStmt expr) = evalExpr env expr
 evalStmt env (IfStmt expr st1 st2) = do {
@@ -161,14 +165,25 @@ myEvaluate :: StateT -> [Statement] -> StateTransformer Value
 myEvaluate st [] = return Nil
 myEvaluate st ((BreakStmt Nothing):sts) = return Break
 myEvaluate st ((ContinueStmt Nothing):sts) = return Continue
-myEvaluate st ((ReturnStmt Nothing):sts) = return Nil
-myEvaluate st ((ReturnStmt (Just expr)) :sts) = evalExpr st expr
+myEvaluate st ((ReturnStmt Nothing):sts) = return (Return Nil)
+myEvaluate st ((ReturnStmt (Just expr)) :sts) = evalExpr st expr >>= \x -> return (Return x)
 myEvaluate st (s:sts) = do {
 	x <- evalStmt st s;
 	if (isBreak x)
 		then return Break;
-	else myEvaluate st sts
+	else 
+		if (isReturn x)
+			then return $ getReturn x
+			else myEvaluate st sts
 }
+
+getReturn :: Value -> Value
+getReturn (Return v) = v
+getReturn _ = Nil
+
+isReturn :: Value -> Bool
+isReturn (Return _) = True
+isReturn _ = False
 
 isContinue :: Value -> Bool
 isContinue Continue = True
@@ -210,6 +225,7 @@ infixOp env OpLEq  (Int  v1) (Int  v2) = return $ Bool $ v1 <= v2
 infixOp env OpGT   (Int  v1) (Int  v2) = return $ Bool $ v1 > v2
 infixOp env OpGEq  (Int  v1) (Int  v2) = return $ Bool $ v1 >= v2
 infixOp env OpEq   (Int  v1) (Int  v2) = return $ Bool $ v1 == v2
+infixOp env OpNEq  (Int v1) (Int v2) = return $ Bool $ v1 /= v2
 infixOp env OpEq   (Bool v1) (Bool v2) = return $ Bool $ v1 == v2
 infixOp env OpNEq  (Bool v1) (Bool v2) = return $ Bool $ v1 /= v2
 infixOp env OpLAnd (Bool v1) (Bool v2) = return $ Bool $ v1 && v2

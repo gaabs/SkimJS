@@ -11,6 +11,8 @@ data Value = Bool Bool
 	| Break
 	| Continue
 	| Double Double
+	| Array [Value]
+	| Return Value
 
 --
 -- Pretty Printer
@@ -25,6 +27,7 @@ instance Show Value where
   show Nil = "undefined"
   show (Function (Id name) args sts) = "funcao"
   show (Double double) = show double
+  --show (Return value) = show value
   
 -- This function could be replaced by (unwords.map show). The unwords
 -- function takes a list of String values and uses them to build a 
