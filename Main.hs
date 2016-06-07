@@ -49,7 +49,53 @@ evalExpr env (CallExpr (VarRef (Id name)) exps) = do {
 	then return $ getReturn x
 	else myEvaluate env sts
 	--apagarTemps env ids;
+}	
+	
+evalExpr env (CallExpr (DotRef (VarRef (Id variavel)) (Id function) ) exps) = do {
+	x<-stateLookup env variavel;
+	case function of
+		"concat" -> myConcat env x exps
+		"len" -> return $ (myLen env x)
+--		"head" -> myHead env x
+--		"tail" -> myTail env x
+	;
 }
+
+evalExpr env (DotRef (VarRef (Id variavel)) (Id function) ) = do {
+	x<-stateLookup env variavel;
+	case function of
+		"len" -> return $ (myLen env x)
+--		"head" -> myHead env x
+--		"tail" -> myTail env x
+	;
+}
+
+myConcat :: StateT->Value->[Expression]->StateTransformer Value
+myConcat env (Array l) [] = return $ Array l
+myConcat env (Array l) (h:exps) = do{
+ x <- evalExpr env h;
+ (Array y) <- myConcat env x exps;
+ return $ Array (l++y);
+}
+myConcat env (String l) [] = return $ String l
+myConcat env (String l) (h:exps) = do{
+  x <- evalExpr env h;
+ (String y) <- myConcat env x exps;
+ return $ String (l++y);
+
+}
+
+myLen :: StateT->Value->Value
+myLen env e = Int (count e);
+ 
+
+
+count :: Value->Int
+count (Array []) = 0
+count (Array (e:ex)) = 1 + count(Array ex)
+count (String []) = 0
+count (String (e:ex)) = 1 + count(String ex)
+
 {-
 apagarTemps :: StateT->[Id]->StateTransformer Value
 apagarTemps _ [] = return Nil
