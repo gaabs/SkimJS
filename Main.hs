@@ -14,9 +14,16 @@ evalExpr :: StateT -> Expression -> StateTransformer Value
 evalExpr env (VarRef (Id id)) = stateLookup env id
 evalExpr env (IntLit int) = return $ Int int
 evalExpr env (BoolLit bool) = return $ Bool bool
+evalExpr env (StringLit str) = return $ String str
 evalExpr env (NullLit) = return $ Nil
 evalExpr env (NumLit double) = return $ Double double
-evalExpr env (ArrayLit exps) = return $ Nil
+evalExpr env (ArrayLit []) = return $ Array []
+evalExpr env (ArrayLit (exp:exps)) = do {
+	(Array x) <- (evalExpr env (ArrayLit exps));
+	y <- evalExpr env exp;
+	return $ Array ( [y] ++ x )
+}
+
 evalExpr env (PrefixExpr op expr) = do
     v <- evalExpr env expr
     prefixOp env op v

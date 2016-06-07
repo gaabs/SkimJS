@@ -27,6 +27,7 @@ instance Show Value where
   show Nil = "undefined"
   show (Function (Id name) args sts) = "funcao"
   show (Double double) = show double
+  show (Array arr) = show arr
   --show (Return value) = show value
   
 -- This function could be replaced by (unwords.map show). The unwords
