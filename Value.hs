@@ -1,18 +1,20 @@
 module Value (Value (..)) where
 
 import Language.ECMAScript3.Syntax
+import Data.Map as Map (Map, insert, lookup, union, toList, empty)
 
 data Value = Bool Bool
     | Int Int
     | String String
     | Var String
-    | Nil
+	| Nil
 	| Function Id {-name-} [Id] {-args-} [Statement] {-body-}
 	| Break
 	| Continue
 	| Double Double
 	| Array [Value]
 	| Return Value
+	| Global (Map String Value)
 
 --
 -- Pretty Printer
@@ -28,6 +30,7 @@ instance Show Value where
   show (Function (Id name) args sts) = "funcao"
   show (Double double) = show double
   show (Array arr) = show arr
+  show (Global m) = show m
   --show (Return value) = show value
   
 -- This function could be replaced by (unwords.map show). The unwords

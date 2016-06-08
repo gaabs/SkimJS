@@ -70,6 +70,14 @@ evalExpr env (DotRef (VarRef (Id variavel)) (Id function) ) = do {
 	;
 }
 
+evalExpr env (BracketRef container key) = do{
+	(Array array) <- evalExpr env container;
+	(Int chave) <- evalExpr env key;
+	return $ (array!!chave);
+	
+}
+
+
 myConcat :: StateT->Value->[Expression]->StateTransformer Value
 myConcat env (Array l) [] = return $ Array l
 myConcat env (Array l) (h:exps) = do{
@@ -311,7 +319,7 @@ data PrefixOp = PrefixLNot -- ^ @!@
 --
 
 environment :: Map String Value
-environment = Map.empty
+environment = insert "." (Global Map.empty) Map.empty
 
 stateLookup :: StateT -> String -> StateTransformer Value
 stateLookup env var = ST $ \s ->
