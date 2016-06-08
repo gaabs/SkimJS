@@ -36,6 +36,31 @@ evalExpr env (AssignExpr OpAssign (LVar var) expr) = do
     e <- evalExpr env expr
     setVar var e
 
+evalExpr env (AssignExpr OpAssign (LBracket container keyExp) expr) = do{
+	(Int key)<-evalExpr env keyExp;
+	(Array array)<- evalExpr env container;
+	if(key<0||key>(count(Array array)))
+	then error $ "Array out_of_bounds. ";
+	else
+		case container of
+		(VarRef (Id id))-> do{
+							e <- evalExpr env expr;
+							if(key==0)
+								then let x = Array ([e]++(drop (key+1) array));
+										in setVar id x;			
+							else 
+								let x = Array ((take key array)++[e]++(drop (key+1) array));
+								in setVar id x;
+							}
+		otherwise -> do{
+						e <- evalExpr env expr;
+						if(key==0)
+							then return $ Array ([e]++(drop (key+1) array));			
+						else 
+							return $ Array ((take key array)++[e]++(drop (key+1) array));
+						}
+		;
+}
 
 --evalExpr env (CallExpr Expression [Expression]) 
 	-- falta usar args
@@ -51,8 +76,8 @@ evalExpr env (CallExpr (VarRef (Id name)) exps) = do {
 	--apagarTemps env ids;
 }	
 	
-evalExpr env (CallExpr (DotRef (VarRef (Id variavel)) (Id function) ) exps) = do {
-	x<-stateLookup env variavel;
+evalExpr env (CallExpr (DotRef e (Id function) ) exps) = do {
+	x<-evalExpr env e;
 	case function of
 		"concat" -> myConcat env x exps
 		"len" -> return $ (myLen env x)
@@ -61,8 +86,8 @@ evalExpr env (CallExpr (DotRef (VarRef (Id variavel)) (Id function) ) exps) = do
 	;
 }
 
-evalExpr env (DotRef (VarRef (Id variavel)) (Id function) ) = do {
-	x<-stateLookup env variavel;
+evalExpr env (DotRef e (Id function) ) = do {
+	x<-evalExpr env e;
 	case function of
 		"len" -> return $ (myLen env x)
 		"head" -> myHead env x
@@ -76,7 +101,6 @@ evalExpr env (BracketRef container key) = do{
 	return $ (array!!chave);
 	
 }
-
 
 myConcat :: StateT->Value->[Expression]->StateTransformer Value
 myConcat env (Array l) [] = return $ Array l
@@ -333,8 +357,8 @@ varDecl env (VarDecl (Id id) maybeExpr) = do
     case maybeExpr of
         Nothing -> setVar id Nil
         (Just expr) -> do
-            val <- evalExpr env expr
-            setVar id val
+            val <- evalExpr env expr;
+            setVar id val;
 
 setVar :: String -> Value -> StateTransformer Value
 setVar var val = ST $ \s -> (val, insert var val s)
