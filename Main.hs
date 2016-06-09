@@ -2,7 +2,7 @@ import qualified Language.ECMAScript3.Parser as Parser
 import Language.ECMAScript3.Syntax
 import Control.Monad
 import Control.Applicative
-import Data.Map as Map (Map, insert, lookup, union, toList, empty,delete, intersection )
+import Data.Map as Map
 import Debug.Trace
 import Value
 
@@ -66,16 +66,32 @@ evalExpr env (AssignExpr OpAssign (LBracket container keyExp) expr) = do{
 	-- falta usar args
 	-- assumi que a Expr é sempre VarRef
 	-- escopo de variaveis incorre
-evalExpr env (CallExpr (VarRef (Id name)) exps) = do {
-	(Function (Id name) ids sts) <- stateLookup env name; -- crashes if the variable doesn't exist
-	addLocals ids env exps;
-	x <- myEvaluate env sts;
- 	removeLocals env ids;	
-	if (isReturn x)
-	then return $ getReturn x 
-	else myEvaluate env sts
-	--apagarTemps env ids;
-}	
+evalExpr env (CallExpr (VarRef (Id name)) exps) = do{
+	(Function (Id name) ids sts) <- stateLookup env name;
+	ST $ \s -> do{
+		let (ST funcaoLocais) = addLocals env (BlockStmt sts);
+			(_, varLocais) = funcaoLocais s;
+			(ST funcaoGlobais) = addGlobal varLocais (BlockStmt sts);
+			(_, varGlobais) = funcaoGlobais s;
+			(ST funcaoArgs) = mapM (evalExpr env) exps;
+			(params, _) = funcaoArgs s;
+			parametros = fromList (zip (Prelude.map (\(Id a) -> a) ids) (params));
+			locais = union parametros s;
+			(ST rodarFuncao) = myEvaluate env sts;
+			(val, estadoFinal) = rodarFuncao locais;
+		in do
+			if (isReturn(val))
+				then (getReturn(val), intersection varGlobais (difference estadoFinal parametros))
+			else
+				(val, intersection varGlobais (difference estadoFinal parametros))
+	};		
+			{-x <- myEvaluate env sts;
+			removeLocals env ids;	
+			if (isReturn x)
+			then return $ getReturn x 
+			else myEvaluate env sts
+			--apagarTemps env ids;-}
+}
 	
 evalExpr env (CallExpr (DotRef e (Id function) ) exps) = do {
 	x<-evalExpr env e;
@@ -147,19 +163,76 @@ apagarTemps env ((Id arg):ids)
 
 
 
-addLocals :: [Id] -> StateT-> [Expression] -> StateTransformer Value
-addLocals [] _ _ = return Nil
-addLocals ((Id local):ids) env (e:exps) = do{
-	x <- evalExpr env e;
-	setVarLocal env local x;
---	let (_,state) = getResult (setVarLocal env local x)
-	{-case val of 
-		Nil -> setVarLocal local x
-		otherwise -> do
-			tryToSave local val env 0
-			setVar local x-}	
-	addLocals ids env exps;
-}
+addLocals :: StateT-> Statement -> StateTransformer Value
+addLocals env (BlockStmt []) = return $ Nil
+addLocals env (VarDeclStmt []) = return $ Nil
+addLocals env (VarDeclStmt (decl:ds)) = do
+	varDecl env decl
+	addLocals env (VarDeclStmt ds)
+addLocals env (BlockStmt (s:sts))= do
+	case s of
+			(IfStmt expr ifBlock elseBlock) -> do
+				addLocals env ifBlock
+				addLocals env elseBlock
+				addLocals env (BlockStmt sts)
+			(IfSingleStmt expr ifBlock) -> do
+				addLocals env ifBlock
+				addLocals env (BlockStmt sts)
+			(ForStmt initialize expr1 expr2 stmt) -> do
+				addLocals env stmt
+				addLocals env (BlockStmt sts)
+			(VarDeclStmt (y:ys)) -> do
+				varDecl env y
+				addLocals env (BlockStmt sts)
+			(ExprStmt (CallExpr nameExp args)) -> do
+				res <- evalExpr env (nameExp)
+				case res of
+					(Function name argsName stmts) -> do
+						addLocals env (BlockStmt stmts)
+						addLocals env (BlockStmt sts)
+					_ -> do
+						addLocals env (BlockStmt sts)
+					
+			_ -> addLocals env (BlockStmt sts)
+
+addGlobal :: StateT-> Statement -> StateTransformer Value
+addGlobal env (BlockStmt []) = return Nil
+addGlobal env (BlockStmt ((ExprStmt (AssignExpr OpAssign (LVar var) expr)):xs)) = do
+    v <- stateLookup env var
+    case v of
+    -- Variable not defined :( we'll create it!
+        (Nil) -> do
+            evalStmt env (VarDeclStmt [(VarDecl (Id var) (Nothing))])
+            addGlobal env (BlockStmt xs)
+        _ -> addGlobal env (BlockStmt xs)
+addGlobal env (BlockStmt (x:xs)) = do
+    case x of
+        (IfStmt expr ifBlock elseBlock) -> do
+            addGlobal env ifBlock
+            addGlobal env elseBlock
+            addGlobal env (BlockStmt xs)
+        (IfSingleStmt expr ifBlock) -> do
+            addGlobal env ifBlock
+            addGlobal env (BlockStmt xs)
+        (ForStmt initialize expr1 expr2 stmt) -> do
+            case initialize of
+                (ExprInit e) -> do
+                    addGlobal env (BlockStmt [ExprStmt e])
+                    addGlobal env stmt
+                    addGlobal env (BlockStmt xs)
+                _ -> do
+                    addGlobal env stmt
+                    addGlobal env (BlockStmt xs)
+        (ExprStmt (CallExpr nameExp args)) -> do
+            res <- evalExpr env (nameExp)
+            case res of
+                (Vazia _) -> addGlobal env (BlockStmt xs)
+                (Function name argsName stmts) -> do
+                    addGlobal env (BlockStmt stmts)
+                    addGlobal env (BlockStmt xs)
+        _ -> addGlobal env (BlockStmt xs)
+ 
+
 
 tryToSave :: String->Value->StateT->Int->StateTransformer Value
 tryToSave _ Nil _ _ = return Nil
@@ -308,7 +381,7 @@ boolAux (Var x) = x /= []
 -- Do not touch this one :)
 evaluate :: StateT -> [Statement] -> StateTransformer Value
 evaluate env [] = return Nil
-evaluate env stmts = foldl1 (>>) $ map (evalStmt env) stmts
+evaluate env stmts = foldl1 (>>) $ Prelude.map (evalStmt env) stmts
 
 --
 -- Operators
@@ -330,6 +403,9 @@ infixOp env OpEq   (Bool v1) (Bool v2) = return $ Bool $ v1 == v2
 infixOp env OpNEq  (Bool v1) (Bool v2) = return $ Bool $ v1 /= v2
 infixOp env OpLAnd (Bool v1) (Bool v2) = return $ Bool $ v1 && v2
 infixOp env OpLOr  (Bool v1) (Bool v2) = return $ Bool $ v1 || v2
+infixOp env op (Return v1) (v2) = (infixOp env op v1 v2)
+infixOp env op (v1) (Return v2) = (infixOp env op v1 v2)
+
 
 prefixOp :: StateT -> PrefixOp ->  Value -> StateTransformer Value
 prefixOp env PrefixMinus (Int  v) = return $ Int  $ -v
@@ -355,7 +431,7 @@ stateLookup env var = ST $ \s ->
     -- this way the error won't be skipped by lazy evaluation
     case Map.lookup var env of
         Nothing -> case Map.lookup var s of
-						Nothing -> (Nil, s)
+						Nothing -> ((Vazia Nil), s)
 						Just val -> (val, s)
         Just val -> (val, env)
 

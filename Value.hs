@@ -15,6 +15,7 @@ data Value = Bool Bool
 	| Array [Value]
 	| Return Value
 	| Global (Map String Value)
+	| Vazia Value
 
 --
 -- Pretty Printer
