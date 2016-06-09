@@ -178,7 +178,6 @@ myStateLookup env var = ST $ \s ->
 
 evalStmt :: StateT -> Statement -> StateTransformer Value
 evalStmt env (BlockStmt sts) = myEvaluate env sts; 
-
 evalStmt env EmptyStmt = return Nil
 evalStmt env (ExprStmt expr) = evalExpr env expr
 evalStmt env (IfStmt expr st1 st2) = do {
@@ -201,7 +200,10 @@ evalStmt env (WhileStmt expr st) = do {
 			x <- evalStmt env st;
 			if(isBreak x)
 				then return Nil;
-			else evalStmt env (WhileStmt expr st);
+			else 
+				if (isReturn x)
+					then return $ x;
+				else evalStmt env (WhileStmt expr st);
 		}
 	else return Nil;
 }
@@ -221,10 +223,13 @@ evalStmt env (ForStmt init (test) (inc) st) = do {
 		Nothing ->	do {x <- evalStmt env st;
 						if (isBreak x)
 							then return Nil;
-						else 
-							case inc of
-								Nothing ->	evalStmt env (ForStmt NoInit (test) (inc) st);
-								Just expr -> do {evalExpr env expr >> evalStmt env (ForStmt NoInit (test) (inc) st)};	
+						else
+							if (isReturn x)
+								then return $ x;
+							else
+								case inc of
+									Nothing ->	evalStmt env (ForStmt NoInit (test) (inc) st);
+									Just expr -> do {evalExpr env expr >> evalStmt env (ForStmt NoInit (test) (inc) st)};	
 					};
 		Just expr -> do {
 						v<-evalExpr env expr;
@@ -234,9 +239,12 @@ evalStmt env (ForStmt init (test) (inc) st) = do {
 								if (isBreak x)
 									then return Nil;
 								else 
-									case inc of
-										Nothing ->	evalStmt env (ForStmt NoInit (test) (inc) st);
-										Just expr -> do {evalExpr env expr >> evalStmt env (ForStmt NoInit (test) (inc) st)};	
+									if (isReturn x)
+										then return $ x;	
+									else
+										case inc of
+											Nothing ->	evalStmt env (ForStmt NoInit (test) (inc) st);
+											Just expr -> do {evalExpr env expr >> evalStmt env (ForStmt NoInit (test) (inc) st)};	
 							};
 						else
 							return Nil;
@@ -252,6 +260,8 @@ evalStmt env (FunctionStmt (Id name) args sts) = do {
 	let f = Function (Id name) args sts;
 	in ST $ (\s -> (f, insert name f s));
 }
+evalStmt env ((ReturnStmt Nothing)) = return (Return Nil)
+evalStmt env ((ReturnStmt (Just expr))) = evalExpr env expr >>= \x -> return (Return x)
 
 
 --falta fazer break e continue com label
@@ -268,7 +278,7 @@ myEvaluate st (s:sts) = do {
 		then return Break;
 	else 
 		if (isReturn x)
-			then return $ getReturn x
+			then return $ x
 			else myEvaluate st sts
 }
 
