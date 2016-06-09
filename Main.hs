@@ -2,7 +2,7 @@ import qualified Language.ECMAScript3.Parser as Parser
 import Language.ECMAScript3.Syntax
 import Control.Monad
 import Control.Applicative
-import Data.Map as Map (Map, insert, lookup, union, toList, empty)
+import Data.Map as Map (Map, insert, lookup, union, toList, empty,delete, intersection )
 import Debug.Trace
 import Value
 
@@ -68,10 +68,11 @@ evalExpr env (AssignExpr OpAssign (LBracket container keyExp) expr) = do{
 	-- escopo de variaveis incorre
 evalExpr env (CallExpr (VarRef (Id name)) exps) = do {
 	(Function (Id name) ids sts) <- stateLookup env name; -- crashes if the variable doesn't exist
-	argsLookup ids env exps;
+	addLocals ids env exps;
 	x <- myEvaluate env sts;
+ 	removeLocals env ids;	
 	if (isReturn x)
-	then return $ getReturn x
+	then return $ getReturn x 
 	else myEvaluate env sts
 	--apagarTemps env ids;
 }	
@@ -146,35 +147,29 @@ apagarTemps env ((Id arg):ids)
 
 
 
-argsLookup :: [Id] -> StateT-> [Expression] -> StateTransformer Value
-argsLookup [] _ _ = return Nil
-argsLookup ((Id local):ids) env (e:exps) = do
-	x <- evalExpr env e		
-	val <- myStateLookup env local
-	case val of 
-		Nil -> setVar local x
+addLocals :: [Id] -> StateT-> [Expression] -> StateTransformer Value
+addLocals [] _ _ = return Nil
+addLocals ((Id local):ids) env (e:exps) = do{
+	x <- evalExpr env e;
+	setVarLocal env local x;
+--	let (_,state) = getResult (setVarLocal env local x)
+	{-case val of 
+		Nil -> setVarLocal local x
 		otherwise -> do
 			tryToSave local val env 0
-			setVar local x	
-	argsLookup ids env exps
+			setVar local x-}	
+	addLocals ids env exps;
+}
 
 tryToSave :: String->Value->StateT->Int->StateTransformer Value
 tryToSave _ Nil _ _ = return Nil
 tryToSave s v env i = do{
-	val <- myStateLookup env (s++"Temp"++(show i));
+	val <- stateLookup env (s++"Temp"++(show i));
 	case val of
 	Nil -> setVar (s++"Temp"++(show i)) v
 	otherwise -> tryToSave s v env (i+1)
 	;
 }
-
-myStateLookup :: StateT -> String -> StateTransformer Value
-myStateLookup env var = ST $ \s ->
-    -- this way the error won't be skipped by lazy evaluation
-    case Map.lookup var (union s env) of
-        Nothing -> (Nil, s)
-        Just val -> (val, s)
-	;
 
 evalStmt :: StateT -> Statement -> StateTransformer Value
 evalStmt env (BlockStmt sts) = myEvaluate env sts; 
@@ -358,9 +353,11 @@ environment = insert "." (Global Map.empty) Map.empty
 stateLookup :: StateT -> String -> StateTransformer Value
 stateLookup env var = ST $ \s ->
     -- this way the error won't be skipped by lazy evaluation
-    case Map.lookup var (union s env) of
-        Nothing -> error $ "Variable " ++ show var ++ " not defined."
-        Just val -> (val, s)
+    case Map.lookup var env of
+        Nothing -> case Map.lookup var s of
+						Nothing -> (Nil, s)
+						Just val -> (val, s)
+        Just val -> (val, env)
 
 varDecl :: StateT -> VarDecl -> StateTransformer Value
 varDecl env (VarDecl (Id id) maybeExpr) = do
@@ -370,8 +367,25 @@ varDecl env (VarDecl (Id id) maybeExpr) = do
             val <- evalExpr env expr;
             setVar id val;
 
+
+removeLocals :: StateT->[Id]->StateTransformer Value			
+removeLocals env [] = return $ Nil 
+removeLocals env (Id id:ids) = do{
+
+	--let (val, state) = getResult (removeLocalsEach env id)
+	let state = (Map.intersection (Map.delete id env) env)
+	in removeLocals state ids; 
+
+}
+			
+			
+				
 setVar :: String -> Value -> StateTransformer Value
 setVar var val = ST $ \s -> (val, insert var val s)
+
+setVarLocal :: StateT -> String -> Value -> StateTransformer Value
+setVarLocal env var val = ST $ \s -> (val, insert var val (union s env))
+
 
 --
 -- Types and boilerplate
@@ -401,7 +415,7 @@ instance Applicative StateTransformer where
 --
 
 showResult :: (Value, StateT) -> String
-showResult (val, defs) =    show val ++ "\n" ++ show (toList $ union defs environment) ++ "\n"
+showResult (val, defs) =    show val ++ "\n" ++ show (toList $ defs ) ++ "\n"
 
 getResult :: StateTransformer Value -> (Value, StateT)
 getResult (ST f) = f Map.empty
