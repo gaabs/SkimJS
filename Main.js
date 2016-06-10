@@ -27,10 +27,16 @@ function test(){
 	return 0;
 }
 
+function alterGlobal(){
+	d=d+5;
+	return d;
+}
+
 var a = id(10);
 var b = fat1(10);
 var c = fat2(10);
 var d = test();
+var e = alterGlobal();
 d;
 [1,2,3] == [3,4,5]
-//lineCond(1,0);
+lineCond(1,0);

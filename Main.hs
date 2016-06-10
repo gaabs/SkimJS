@@ -70,7 +70,7 @@ evalExpr env (CallExpr (VarRef (Id name)) exps) = do{
 	(Function (Id name) ids sts) <- stateLookup env name;
 	ST $ \s -> do{
 		let (ST funcaoLocais) = addLocals env (BlockStmt sts);
-			(_, varLocais) = funcaoLocais s;
+			(_, varLocais) = funcaoLocais env;
 			(ST funcaoGlobais) = addGlobal varLocais (BlockStmt sts);
 			(_, varGlobais) = funcaoGlobais s;
 			(ST funcaoArgs) = mapM (evalExpr env) exps;
@@ -81,9 +81,9 @@ evalExpr env (CallExpr (VarRef (Id name)) exps) = do{
 			(val, estadoFinal) = rodarFuncao locais;
 		in do
 			if (isReturn(val))
-				then (getReturn(val), union (intersection (difference estadoFinal varLocais) varGlobais) varGlobais)
+				then (getReturn(val), union (difference estadoFinal (union varLocais parametros)) varGlobais)
 			else
-				(val, union (intersection (difference estadoFinal varLocais) varGlobais) varGlobais)
+				(val, union (difference estadoFinal (union varLocais parametros)) varGlobais)
 	};
 }
 	
@@ -181,14 +181,14 @@ addLocals env (BlockStmt (s:sts))= do
 						addLocals env (BlockStmt sts)
 					
 			_ -> addLocals env (BlockStmt sts)
+addLocals env _ = return $ Nil
 
 addGlobal :: StateT-> Statement -> StateTransformer Value
 addGlobal env (BlockStmt []) = return Nil
 addGlobal env (BlockStmt ((ExprStmt (AssignExpr OpAssign (LVar var) expr)):xs)) = do
     v <- stateLookup env var
     case v of
-    -- Variable not defined :( we'll create it!
-        (Nil) -> do
+        (Vazia _) -> do
             evalStmt env (VarDeclStmt [(VarDecl (Id var) (Nothing))])
             addGlobal env (BlockStmt xs)
         _ -> addGlobal env (BlockStmt xs)
@@ -218,7 +218,9 @@ addGlobal env (BlockStmt (x:xs)) = do
                     addGlobal env (BlockStmt stmts)
                     addGlobal env (BlockStmt xs)
         _ -> addGlobal env (BlockStmt xs)
+addGlobal env _ = return $ Nil
 
+		
 evalStmt :: StateT -> Statement -> StateTransformer Value
 evalStmt env (BlockStmt sts) = myEvaluate env sts; 
 evalStmt env EmptyStmt = return Nil
