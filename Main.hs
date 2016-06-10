@@ -81,16 +81,10 @@ evalExpr env (CallExpr (VarRef (Id name)) exps) = do{
 			(val, estadoFinal) = rodarFuncao locais;
 		in do
 			if (isReturn(val))
-				then (getReturn(val), union (intersection (difference estadoFinal parametros) varGlobais) varGlobais)
+				then (getReturn(val), union (intersection (difference estadoFinal varLocais) varGlobais) varGlobais)
 			else
-				(val, union (intersection (difference estadoFinal parametros) varGlobais) varGlobais)
-	};		
-			{-x <- myEvaluate env sts;
-			removeLocals env ids;	
-			if (isReturn x)
-			then return $ getReturn x 
-			else myEvaluate env sts
-			--apagarTemps env ids;-}
+				(val, union (intersection (difference estadoFinal varLocais) varGlobais) varGlobais)
+	};
 }
 	
 evalExpr env (CallExpr (DotRef e (Id function) ) exps) = do {
