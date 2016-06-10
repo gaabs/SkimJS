@@ -16,6 +16,7 @@ data Value = Bool Bool
 	| Return Value
 	| Global (Map String Value)
 	| Vazia Value
+	deriving Eq
 
 --
 -- Pretty Printer

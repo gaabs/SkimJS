@@ -81,9 +81,9 @@ evalExpr env (CallExpr (VarRef (Id name)) exps) = do{
 			(val, estadoFinal) = rodarFuncao locais;
 		in do
 			if (isReturn(val))
-				then (getReturn(val), intersection varGlobais (difference estadoFinal parametros))
+				then (getReturn(val), union (intersection (difference estadoFinal parametros) varGlobais) varGlobais)
 			else
-				(val, intersection varGlobais (difference estadoFinal parametros))
+				(val, union (intersection (difference estadoFinal parametros) varGlobais) varGlobais)
 	};		
 			{-x <- myEvaluate env sts;
 			removeLocals env ids;	
@@ -155,14 +155,6 @@ count (Array (e:ex)) = 1 + count(Array ex)
 count (String []) = 0
 count (String (e:ex)) = 1 + count(String ex)
 
-{-
-apagarTemps :: StateT->[Id]->StateTransformer Value
-apagarTemps _ [] = return Nil
-apagarTemps env ((Id arg):ids)
- | -}
-
-
-
 addLocals :: StateT-> Statement -> StateTransformer Value
 addLocals env (BlockStmt []) = return $ Nil
 addLocals env (VarDeclStmt []) = return $ Nil
@@ -187,6 +179,7 @@ addLocals env (BlockStmt (s:sts))= do
 			(ExprStmt (CallExpr nameExp args)) -> do
 				res <- evalExpr env (nameExp)
 				case res of
+					(Vazia _) -> addLocals env (BlockStmt sts)
 					(Function name argsName stmts) -> do
 						addLocals env (BlockStmt stmts)
 						addLocals env (BlockStmt sts)
@@ -231,18 +224,6 @@ addGlobal env (BlockStmt (x:xs)) = do
                     addGlobal env (BlockStmt stmts)
                     addGlobal env (BlockStmt xs)
         _ -> addGlobal env (BlockStmt xs)
- 
-
-
-tryToSave :: String->Value->StateT->Int->StateTransformer Value
-tryToSave _ Nil _ _ = return Nil
-tryToSave s v env i = do{
-	val <- stateLookup env (s++"Temp"++(show i));
-	case val of
-	Nil -> setVar (s++"Temp"++(show i)) v
-	otherwise -> tryToSave s v env (i+1)
-	;
-}
 
 evalStmt :: StateT -> Statement -> StateTransformer Value
 evalStmt env (BlockStmt sts) = myEvaluate env sts; 
@@ -403,8 +384,10 @@ infixOp env OpEq   (Bool v1) (Bool v2) = return $ Bool $ v1 == v2
 infixOp env OpNEq  (Bool v1) (Bool v2) = return $ Bool $ v1 /= v2
 infixOp env OpLAnd (Bool v1) (Bool v2) = return $ Bool $ v1 && v2
 infixOp env OpLOr  (Bool v1) (Bool v2) = return $ Bool $ v1 || v2
-infixOp env op (Return v1) (v2) = (infixOp env op v1 v2)
-infixOp env op (v1) (Return v2) = (infixOp env op v1 v2)
+infixOp env OpEq  (v1) (v2) = return $ Bool $ v1 == v2
+infixOp env OpNEq  (v1) (v2) = return $ Bool $ v1 /= v2
+--infixOp env op (Return v1) (v2) = (infixOp env op v1 v2)
+--infixOp env op (v1) (Return v2) = (infixOp env op v1 v2)
 
 
 prefixOp :: StateT -> PrefixOp ->  Value -> StateTransformer Value
