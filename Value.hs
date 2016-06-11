@@ -29,7 +29,7 @@ instance Show Value where
   show (String str) = "\"" ++ str ++ "\""
   show (Var name) = name
   show Nil = "undefined"
-  show (Function (Id name) args sts) = "funcao"
+  show (Function (Id name) args sts) = "function: " ++ show args
   show (Double double) = show double
   show (Array arr) = show arr
   show (Global m) = show m

@@ -311,6 +311,7 @@ evalStmt env (FunctionStmt (Id name) args sts) = do {
 }
 evalStmt env ((ReturnStmt Nothing)) = return (Return Nil)
 evalStmt env ((ReturnStmt (Just expr))) = evalExpr env expr >>= \x -> return (Return x)
+evalStmt env ((BreakStmt Nothing)) = return (Break)
 
 myEvaluate :: StateT -> [Statement] -> StateTransformer Value
 myEvaluate st [] = return Nil
