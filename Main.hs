@@ -62,6 +62,13 @@ evalExpr env (AssignExpr OpAssign (LBracket container keyExp) expr) = do{
 		;
 }
 
+evalExpr env (UnaryAssignExpr unaryAssignOp (LVar var)) = do
+	case unaryAssignOp of
+		PrefixInc -> evalExpr env (AssignExpr OpAssign (LVar var) (InfixExpr OpAdd (VarRef (Id var)) (IntLit 1)))
+		PostfixInc -> evalExpr env (AssignExpr OpAssign (LVar var) (InfixExpr OpAdd (VarRef (Id var)) (IntLit 1)))
+		PrefixDec -> evalExpr env (AssignExpr OpAssign (LVar var) (InfixExpr OpSub (VarRef (Id var)) (IntLit 1)))
+		PostfixDec -> evalExpr env (AssignExpr OpAssign (LVar var) (InfixExpr OpSub (VarRef (Id var)) (IntLit 1)))
+
 --evalExpr env (CallExpr Expression [Expression]) 
 	-- falta usar args
 	-- assumi que a Expr é sempre VarRef
@@ -92,6 +99,7 @@ evalExpr env (CallExpr (DotRef e (Id function) ) exps) = do {
 	case function of
 		"concat" -> myConcat env x exps
 		"len" -> return $ (myLen env x)
+		"length" -> return $ (myLen env x)
 		"head" -> myHead env x
 		"tail" -> myTail env x
 	;
@@ -101,6 +109,7 @@ evalExpr env (DotRef e (Id function) ) = do {
 	x<-evalExpr env e;
 	case function of
 		"len" -> return $ (myLen env x)
+		"length" -> return $ (myLen env x)
 		"head" -> myHead env x
 		"tail" -> myTail env x
 	;
@@ -240,7 +249,6 @@ evalStmt env (IfSingleStmt expr st) = do {
 evalStmt env (WhileStmt expr st) = do {
 	v <- evalExpr env expr;
 	if (boolAux v) 
-		-- n entendi como transformou de StateTransformer Value para StateT
 		then do { 
 			x <- evalStmt env st;
 			if(isBreak x)
@@ -253,10 +261,6 @@ evalStmt env (WhileStmt expr st) = do {
 	else return Nil;
 }
 
--- DoWhileStmt Statement Expression
--- ForInStmt ForInInit Expression Statement 
--- LabelledStmt Id Statement
-	
 
 evalStmt env (ForStmt init (test) (inc) st) = do {
 	case init of
@@ -308,9 +312,6 @@ evalStmt env (FunctionStmt (Id name) args sts) = do {
 evalStmt env ((ReturnStmt Nothing)) = return (Return Nil)
 evalStmt env ((ReturnStmt (Just expr))) = evalExpr env expr >>= \x -> return (Return x)
 
-
---falta fazer break e continue com label
---break funciona em qq coisa
 myEvaluate :: StateT -> [Statement] -> StateTransformer Value
 myEvaluate st [] = return Nil
 myEvaluate st ((BreakStmt Nothing):sts) = return Break
@@ -477,7 +478,9 @@ getResult (ST f) = f Map.empty
 
 main :: IO ()
 main = do
-    js <- Parser.parseFromFile "Main.js"
+    --js <- Parser.parseFromFile "Main.js"
+    filename <- getLine
+    js <- Parser.parseFromFile filename
     let statements = unJavaScript js
     putStrLn $ "AST: " ++ (show $ statements) ++ "\n"
     putStr $ showResult $ getResult $ evaluate environment statements

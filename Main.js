@@ -27,8 +27,14 @@ function test(){
 	return 0;
 }
 
+function test2(){
+	c = 0;
+	var c = -1;
+}
+
 function alterGlobal(){
 	d=d+5;
+	var k = 0;
 	return d;
 }
 
@@ -36,6 +42,7 @@ var a = id(10);
 var b = fat1(10);
 var c = fat2(10);
 var d = test();
+test2();
 var e = alterGlobal();
 d;
 [1,2,3] == [3,4,5]
