@@ -10,6 +10,8 @@ import Value
 -- Evaluate functions
 --
 
+
+
 evalExpr :: StateT -> Expression -> StateTransformer Value
 evalExpr env (VarRef (Id id)) = stateLookup env id
 evalExpr env (IntLit int) = return $ Int int
@@ -23,6 +25,9 @@ evalExpr env (ArrayLit (exp:exps)) = do {
 	y <- evalExpr env exp;
 	return $ Array ( [y] ++ x )
 }
+
+evalExpr env (FuncExpr (Nothing) args sts) = return $ Function (Id "") args sts;
+evalExpr env (FuncExpr (Just id) args sts) = return $ Function (id) args sts;
 
 evalExpr env (PrefixExpr op expr) = do
     v <- evalExpr env expr
@@ -66,12 +71,22 @@ evalExpr env (AssignExpr OpAssign (LBracket container keyExp) expr) = do{
 		(String array) -> return Nil
 }
 
+
+
+evalExpr env (AssignExpr op (LVar var) expr) = do
+    case op of
+		OpAssignAdd -> evalExpr env (AssignExpr OpAssign (LVar var) (InfixExpr OpAdd (VarRef (Id var)) expr))
+		OpAssignSub -> evalExpr env (AssignExpr OpAssign (LVar var) (InfixExpr OpSub (VarRef (Id var)) expr))
+		OpAssignMul -> evalExpr env (AssignExpr OpAssign (LVar var) (InfixExpr OpMul (VarRef (Id var)) expr))
+		OpAssignDiv -> evalExpr env (AssignExpr OpAssign (LVar var) (InfixExpr OpDiv (VarRef (Id var)) expr))
+		OpAssignMod -> evalExpr env (AssignExpr OpAssign (LVar var) (InfixExpr OpMod (VarRef (Id var)) expr))
+
 evalExpr env (UnaryAssignExpr unaryAssignOp (LVar var)) = do
 	case unaryAssignOp of
-		PrefixInc -> evalExpr env (AssignExpr OpAssign (LVar var) (InfixExpr OpAdd (VarRef (Id var)) (IntLit 1)))
-		PostfixInc -> evalExpr env (AssignExpr OpAssign (LVar var) (InfixExpr OpAdd (VarRef (Id var)) (IntLit 1)))
-		PrefixDec -> evalExpr env (AssignExpr OpAssign (LVar var) (InfixExpr OpSub (VarRef (Id var)) (IntLit 1)))
-		PostfixDec -> evalExpr env (AssignExpr OpAssign (LVar var) (InfixExpr OpSub (VarRef (Id var)) (IntLit 1)))
+		PrefixInc -> evalExpr env (AssignExpr OpAssignAdd (LVar var) (IntLit 1))
+		PostfixInc -> evalExpr env (AssignExpr OpAssignAdd (LVar var) (IntLit 1))
+		PrefixDec -> evalExpr env (AssignExpr OpAssignSub (LVar var) (IntLit 1))
+		PostfixDec -> evalExpr env (AssignExpr OpAssignSub (LVar var) (IntLit 1))
 
 evalExpr env (CallExpr (VarRef (Id name)) exps) = do{
 	(Function (Id name) ids sts) <- stateLookup env name;
@@ -320,6 +335,7 @@ evalStmt env (FunctionStmt (Id name) args sts) = do {
 	let f = Function (Id name) args sts;
 	in ST $ (\s -> (f, insert name f s));
 }
+
 evalStmt env ((ReturnStmt Nothing)) = return (Return Nil)
 evalStmt env ((ReturnStmt (Just expr))) = evalExpr env expr >>= \x -> return (Return x)
 evalStmt env ((BreakStmt Nothing)) = return (Break)

@@ -1,4 +1,7 @@
-var x = 0, y = 10;
-var z = x + y;
-if ("") z = x - y;
-console.log(z);
+
+var f = function(a,b){
+	return a+b;
+}
+
+f(3,5);
+//console.log(f);
