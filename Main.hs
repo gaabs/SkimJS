@@ -37,32 +37,33 @@ evalExpr env (AssignExpr OpAssign (LVar var) expr) = do
     setVar var e
 
 evalExpr env (AssignExpr OpAssign (LBracket container keyExp) expr) = do{
-	(Array array)<- evalExpr env container;
-	k<-evalExpr env keyExp;
-	case k of
-	(Int key)-> do
-		if(key<0||key>(count(Array array)))
-			then error $ "Array out_of_bounds. "
-		else
-			case container of
-			(VarRef (Id id))-> do{
+	vector <- evalExpr env container;
+	case vector of
+		(Array array) -> do {
+			(Int key)<-evalExpr env keyExp;
+			if(key<0||key>(count(Array array)))
+			then error $ "Array out_of_bounds. ";
+			else
+				case container of
+				(VarRef (Id id))-> do{
+									e <- evalExpr env expr;
+									if(key==0)
+										then let x = Array ([e]++(drop (key+1) array));
+												in setVar id x;			
+									else 
+										let x = Array ((take key array)++[e]++(drop (key+1) array));
+										in setVar id x;
+									}
+				otherwise -> do{
 								e <- evalExpr env expr;
 								if(key==0)
-									then let x = Array ([e]++(drop (key+1) array));
-											in setVar id x;			
+									then return $ Array ([e]++(drop (key+1) array));			
 								else 
-									let x = Array ((take key array)++[e]++(drop (key+1) array));
-									in setVar id x;
+									return $ Array ((take key array)++[e]++(drop (key+1) array));
 								}
-			otherwise -> do{
-							e <- evalExpr env expr;
-							if(key==0)
-								then return $ Array ([e]++(drop (key+1) array));			
-							else 
-								return $ Array ((take key array)++[e]++(drop (key+1) array));
-							}
-			;
-	_ -> return $ Nil
+				;
+			}
+		(String array) -> return Nil
 }
 
 evalExpr env (UnaryAssignExpr unaryAssignOp (LVar var)) = do
@@ -72,10 +73,6 @@ evalExpr env (UnaryAssignExpr unaryAssignOp (LVar var)) = do
 		PrefixDec -> evalExpr env (AssignExpr OpAssign (LVar var) (InfixExpr OpSub (VarRef (Id var)) (IntLit 1)))
 		PostfixDec -> evalExpr env (AssignExpr OpAssign (LVar var) (InfixExpr OpSub (VarRef (Id var)) (IntLit 1)))
 
---evalExpr env (CallExpr Expression [Expression]) 
-	-- falta usar args
-	-- assumi que a Expr é sempre VarRef
-	-- escopo de variaveis incorre
 evalExpr env (CallExpr (VarRef (Id name)) exps) = do{
 	(Function (Id name) ids sts) <- stateLookup env name;
 	ST $ \s -> do{
@@ -119,15 +116,21 @@ evalExpr env (DotRef e (Id function) ) = do {
 }
 
 evalExpr env (BracketRef container key) = do{
-	v<-evalExpr env container;
-	chave <- evalExpr env key;
+	v <- evalExpr env container;
+	
 	case v of
-		(Array array) ->  do
-			case chave of
-				(Int c) -> return $ (array!!c)
-				_ -> return $ Nil
+		(Array array) -> do {
+								(Int chave) <- evalExpr env key;
+								return $ (array!!chave);
+							}
+		
+		(String string) -> do {
+								(Int chave) <- evalExpr env key;
+								return $ String [(string!!chave)];
+							}
 		_ -> return $ Nil
 	;
+	
 }
 
 myConcat :: StateT->Value->[Expression]->StateTransformer Value
@@ -398,6 +401,8 @@ infixOp env OpNEq  (v1) (v2) = return $ Bool $ v1 /= v2
 
 prefixOp :: StateT -> PrefixOp ->  Value -> StateTransformer Value
 prefixOp env PrefixMinus (Int  v) = return $ Int  $ -v
+prefixOp env PrefixPlus (Int  v) = return $ Int  $ v
+prefixOp env PrefixLNot (Bool  v) = return $ Bool  $ not v
 {-
 data PrefixOp = PrefixLNot -- ^ @!@
               | PrefixBNot -- ^ @~@
