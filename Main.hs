@@ -183,6 +183,7 @@ count (Array []) = 0
 count (Array (e:ex)) = 1 + count(Array ex)
 count (String []) = 0
 count (String (e:ex)) = 1 + count(String ex)
+count _ = 0
 
 addLocals :: StateT-> Statement -> StateTransformer Value
 addLocals env (BlockStmt []) = return $ Nil
