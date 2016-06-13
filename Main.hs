@@ -88,6 +88,7 @@ evalExpr env (UnaryAssignExpr unaryAssignOp (LVar var)) = do
 		PrefixDec -> evalExpr env (AssignExpr OpAssignSub (LVar var) (IntLit 1))
 		PostfixDec -> evalExpr env (AssignExpr OpAssignSub (LVar var) (IntLit 1))
 
+{-
 evalExpr env (CallExpr (VarRef (Id name)) exps) = do{
 	(Function (Id name) ids sts) <- stateLookup env name;
 	ST $ \s -> do{
@@ -107,6 +108,18 @@ evalExpr env (CallExpr (VarRef (Id name)) exps) = do{
 			else
 				(val, union (difference estadoFinal (union varLocais parametros)) varGlobais)
 	};
+}
+-}
+
+evalExpr env (CallExpr (VarRef (Id name)) exps) = do {
+	(Function (Id name) ids sts) <- stateLookup env name; -- crashes if the variable doesn't exist
+	pushScope env;
+	getArgs ids env exps;
+	return <- myEvaluate env sts;
+	popScope env;
+	ST $ \s -> (getReturn(return),s);
+		
+	--apagarTemps env ids;
 }
 
 evalExpr env (CallExpr (DotRef e (Id function) ) exps) = do {
@@ -147,6 +160,19 @@ evalExpr env (BracketRef container key) = do{
 	;
 
 }
+
+getArgs :: [Id] -> StateT-> [Expression] -> StateTransformer Value
+getArgs [] _ _ = return Nil
+getArgs ((Id id):ids) env (exp:exps) = do
+	x <- evalExpr env exp
+	setVar id x
+	getArgs ids env exps
+	
+pushScope :: StateT -> StateTransformer Value
+pushScope env = ST $ \st -> (Nil, Map.empty:st)
+
+popScope :: StateT -> StateTransformer Value
+popScope env = ST $ \(st:sts) -> (Nil, sts)
 
 myConcat :: StateT->Value->[Expression]->StateTransformer Value
 myConcat env (Array l) [] = return $ Array l
@@ -334,7 +360,7 @@ evalStmt env (VarDeclStmt (decl:ds)) =
 
 evalStmt env (FunctionStmt (Id name) args sts) = do {
 	let f = Function (Id name) args sts;
-	in ST $ (\s -> (f, insert name f s));
+	in setVar name f;
 }
 
 evalStmt env ((ReturnStmt Nothing)) = return (Return Nil)
@@ -434,17 +460,21 @@ data PrefixOp = PrefixLNot -- ^ @!@
 -- Environment and auxiliary functions
 --
 
-environment :: Map String Value
-environment = Map.empty
+environment :: [Map String Value]
+environment = [Map.empty]
 
 stateLookup :: StateT -> String -> StateTransformer Value
 stateLookup env var = ST $ \s ->
-    -- this way the error won't be skipped by lazy evaluation
-    case Map.lookup var env of
-        Nothing -> case Map.lookup var s of
-						Nothing -> ((Vazia Nil), s)
-						Just val -> (val, s)
-        Just val -> (val, env)
+    case scopeLookup s var of
+        Nothing -> (Nil, s)
+        Just val -> (val, s)
+
+scopeLookup :: StateT -> String -> Maybe Value
+scopeLookup [] _ = Nothing
+scopeLookup (scope:scopes) var =
+    case Map.lookup var scope of
+        Nothing -> scopeLookup scopes var
+        Just val -> Just val
 
 varDecl :: StateT -> VarDecl -> StateTransformer Value
 varDecl env (VarDecl (Id id) maybeExpr) = do
@@ -454,31 +484,14 @@ varDecl env (VarDecl (Id id) maybeExpr) = do
             val <- evalExpr env expr;
             setVar id val;
 
-
-removeLocals :: StateT->[Id]->StateTransformer Value
-removeLocals env [] = return $ Nil
-removeLocals env (Id id:ids) = do{
-
-	--let (val, state) = getResult (removeLocalsEach env id)
-	let state = (Map.intersection (Map.delete id env) env)
-	in removeLocals state ids;
-
-}
-
-
-
 setVar :: String -> Value -> StateTransformer Value
-setVar var val = ST $ \s -> (val, insert var val s)
-
-setVarLocal :: StateT -> String -> Value -> StateTransformer Value
-setVarLocal env var val = ST $ \s -> (val, insert var val (union s env))
-
+setVar var val = ST $ \(st:sts) -> (val, ((insert var val st):sts))
 
 --
 -- Types and boilerplate
 --
 
-type StateT = Map String Value
+type StateT = [Map String Value]
 data StateTransformer t = ST (StateT -> (t, StateT))
 
 instance Monad StateTransformer where
@@ -502,10 +515,10 @@ instance Applicative StateTransformer where
 --
 
 showResult :: (Value, StateT) -> String
-showResult (val, defs) =    show val ++ "\n" ++ show (toList $ defs ) ++ "\n"
+showResult (val, (def:defs)) = show val ++ "\n" ++ show (toList $ def ) ++ "\n"
 
 getResult :: StateTransformer Value -> (Value, StateT)
-getResult (ST f) = f Map.empty
+getResult (ST f) = f [Map.empty]
 
 main :: IO ()
 main = do
