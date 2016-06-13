@@ -97,15 +97,16 @@ evalExpr env (CallExpr (VarRef (Id name)) exps) = do{
 			(ST funcaoLocais) = addLocals env (BlockStmt sts);
 			(_, varLocais) = funcaoLocais s;
 			(ST funcaoGlobais) = addGlobal s (BlockStmt sts);
-			(_, varGlobais) = funcaoGlobais s;
+			(_, varGlobais) = funcaoGlobais varLocais;
+			varGlobais2 = difference varGlobais varLocais;
 			locais = union parametros s;
 			(ST rodarFuncao) = myEvaluate env sts;
 			(val, estadoFinal) = rodarFuncao locais;
 		in do
 			if (isReturn(val))
-				then (getReturn(val), union (intersection (difference estadoFinal parametros) (intersection varLocais varGlobais)) (intersection varGlobais parametros) )
+				then (getReturn(val), union (intersection (difference estadoFinal parametros) s) (intersection estadoFinal varGlobais2))
 			else
-				(val, union (intersection (difference estadoFinal (union parametros varLocais)) varGlobais) varGlobais)
+				(val, union (intersection (difference estadoFinal parametros) s) (intersection estadoFinal varGlobais2))
 	};
 }
 
@@ -200,6 +201,9 @@ addLocals env (BlockStmt (s:sts))= do
 			(IfSingleStmt expr ifBlock) -> do
 				addLocals env ifBlock
 				addLocals env (BlockStmt sts)
+			(WhileStmt expr stmt) -> do
+				addLocals env stmt
+				addLocals env (BlockStmt sts)		
 			(ForStmt initialize expr1 expr2 stmt) -> do
 				case initialize of
 					(ExprInit e) -> do
@@ -248,6 +252,9 @@ addGlobal env (BlockStmt (x:xs)) = do
 			addGlobal env stmt;
 			addGlobal env (BlockStmt xs);
 		}
+        (WhileStmt expr stmt) -> do
+            addGlobal env stmt
+            addGlobal env (BlockStmt xs)
         (ExprStmt (CallExpr nameExp args)) -> do
             res <- evalExpr env (nameExp)
             case res of
