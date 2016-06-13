@@ -54,16 +54,16 @@ evalExpr env (AssignExpr OpAssign (LBracket container keyExp) expr) = do{
 									e <- evalExpr env expr;
 									if(key==0)
 										then let x = Array ([e]++(drop (key+1) array));
-												in setVar id x;			
-									else 
+												in setVar id x;
+									else
 										let x = Array ((take key array)++[e]++(drop (key+1) array));
 										in setVar id x;
 									}
 				otherwise -> do{
 								e <- evalExpr env expr;
 								if(key==0)
-									then return $ Array ([e]++(drop (key+1) array));			
-								else 
+									then return $ Array ([e]++(drop (key+1) array));
+								else
 									return $ Array ((take key array)++[e]++(drop (key+1) array));
 								}
 				;
@@ -108,7 +108,7 @@ evalExpr env (CallExpr (VarRef (Id name)) exps) = do{
 				(val, union (difference estadoFinal (union varLocais parametros)) varGlobais)
 	};
 }
-	
+
 evalExpr env (CallExpr (DotRef e (Id function) ) exps) = do {
 	x<-evalExpr env e;
 	case function of
@@ -132,20 +132,20 @@ evalExpr env (DotRef e (Id function) ) = do {
 
 evalExpr env (BracketRef container key) = do{
 	v <- evalExpr env container;
-	
+
 	case v of
 		(Array array) -> do {
 								(Int chave) <- evalExpr env key;
 								return $ (array!!chave);
 							}
-		
+
 		(String string) -> do {
 								(Int chave) <- evalExpr env key;
 								return $ String [(string!!chave)];
 							}
 		_ -> return $ Nil
 	;
-	
+
 }
 
 myConcat :: StateT->Value->[Expression]->StateTransformer Value
@@ -165,7 +165,7 @@ myConcat env (String l) (h:exps) = do{
 
 myLen :: StateT->Value->Value
 myLen env e = Int (count e);
- 
+
 myHead :: StateT->Value->StateTransformer Value
 myHead env (Array []) = return $ (Array [])
 myHead env (Array (e:es)) = return $ e
@@ -214,7 +214,7 @@ addLocals env (BlockStmt (s:sts))= do
 						addLocals env (BlockStmt sts)
 					_ -> do
 						addLocals env (BlockStmt sts)
-					
+
 			_ -> addLocals env (BlockStmt sts)
 addLocals env _ = return $ Nil
 
@@ -255,14 +255,14 @@ addGlobal env (BlockStmt (x:xs)) = do
         _ -> addGlobal env (BlockStmt xs)
 addGlobal env _ = return $ Nil
 
-		
+
 evalStmt :: StateT -> Statement -> StateTransformer Value
-evalStmt env (BlockStmt sts) = myEvaluate env sts; 
+evalStmt env (BlockStmt sts) = myEvaluate env sts;
 evalStmt env EmptyStmt = return Nil
 evalStmt env (ExprStmt expr) = evalExpr env expr
 evalStmt env (IfStmt expr st1 st2) = do {
 	v <- evalExpr env expr;
-	if (boolAux v) 
+	if (boolAux v)
 		then evalStmt env st1;
 		else evalStmt env st2;
 }
@@ -274,12 +274,12 @@ evalStmt env (IfSingleStmt expr st) = do {
 }
 evalStmt env (WhileStmt expr st) = do {
 	v <- evalExpr env expr;
-	if (boolAux v) 
-		then do { 
+	if (boolAux v)
+		then do {
 			x <- evalStmt env st;
 			if(isBreak x)
 				then return Nil;
-			else 
+			else
 				if (isReturn x)
 					then return $ x;
 				else evalStmt env (WhileStmt expr st);
@@ -293,7 +293,7 @@ evalStmt env (ForStmt init (test) (inc) st) = do {
 		NoInit -> return Nil
 		VarInit l -> evalStmt env (VarDeclStmt l)
 		ExprInit expr -> evalExpr env expr
-	;	
+	;
 	case test of
 		Nothing ->	do {x <- evalStmt env st;
 						if (isBreak x)
@@ -304,7 +304,7 @@ evalStmt env (ForStmt init (test) (inc) st) = do {
 							else
 								case inc of
 									Nothing ->	evalStmt env (ForStmt NoInit (test) (inc) st);
-									Just expr -> do {evalExpr env expr >> evalStmt env (ForStmt NoInit (test) (inc) st)};	
+									Just expr -> do {evalExpr env expr >> evalStmt env (ForStmt NoInit (test) (inc) st)};
 					};
 		Just expr -> do {
 						v<-evalExpr env expr;
@@ -313,13 +313,13 @@ evalStmt env (ForStmt init (test) (inc) st) = do {
 								x <- evalStmt env st;
 								if (isBreak x)
 									then return Nil;
-								else 
+								else
 									if (isReturn x)
-										then return $ x;	
+										then return $ x;
 									else
 										case inc of
 											Nothing ->	evalStmt env (ForStmt NoInit (test) (inc) st);
-											Just expr -> do {evalExpr env expr >> evalStmt env (ForStmt NoInit (test) (inc) st)};	
+											Just expr -> do {evalExpr env expr >> evalStmt env (ForStmt NoInit (test) (inc) st)};
 							};
 						else
 							return Nil;
@@ -350,7 +350,7 @@ myEvaluate st (s:sts) = do {
 	x <- evalStmt st s;
 	if (isBreak x)
 		then return Break;
-	else 
+	else
 		if (isReturn x)
 			then return $ x
 			else myEvaluate st sts
@@ -434,7 +434,7 @@ data PrefixOp = PrefixLNot -- ^ @!@
 --
 
 environment :: Map String Value
-environment = insert "." (Global Map.empty) Map.empty
+environment = Map.empty
 
 stateLookup :: StateT -> String -> StateTransformer Value
 stateLookup env var = ST $ \s ->
@@ -454,18 +454,18 @@ varDecl env (VarDecl (Id id) maybeExpr) = do
             setVar id val;
 
 
-removeLocals :: StateT->[Id]->StateTransformer Value			
-removeLocals env [] = return $ Nil 
+removeLocals :: StateT->[Id]->StateTransformer Value
+removeLocals env [] = return $ Nil
 removeLocals env (Id id:ids) = do{
 
 	--let (val, state) = getResult (removeLocalsEach env id)
 	let state = (Map.intersection (Map.delete id env) env)
-	in removeLocals state ids; 
+	in removeLocals state ids;
 
 }
-			
-			
-				
+
+
+
 setVar :: String -> Value -> StateTransformer Value
 setVar var val = ST $ \s -> (val, insert var val s)
 
@@ -487,8 +487,8 @@ instance Monad StateTransformer where
             (ST resF) = f v
         in resF newS
 
-		
-		
+
+
 instance Functor StateTransformer where
     fmap = liftM
 
