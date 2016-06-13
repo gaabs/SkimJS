@@ -203,7 +203,7 @@ addLocals env (BlockStmt (s:sts))= do
 				addLocals env (BlockStmt sts)
 			(WhileStmt expr stmt) -> do
 				addLocals env stmt
-				addLocals env (BlockStmt sts)		
+				addLocals env (BlockStmt sts)
 			(ForStmt initialize expr1 expr2 stmt) -> do
 				case initialize of
 					(ExprInit e) -> do
@@ -216,7 +216,7 @@ addLocals env (BlockStmt (s:sts))= do
 			(VarDeclStmt (y:ys)) -> do
 				varDecl env y
 				addLocals env (VarDeclStmt ys)
-				addLocals env (BlockStmt sts)				
+				addLocals env (BlockStmt sts)
 			(ExprStmt (CallExpr nameExp args)) -> do
 				res <- evalExpr env (nameExp)
 				case res of

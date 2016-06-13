@@ -22,4 +22,4 @@ function kadane(x){
 
 var arr = [1,3,5-1,-1,0,4];
 
-var resposta = kadane(arr);
+var a = kadane(arr);
