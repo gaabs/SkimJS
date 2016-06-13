@@ -39,7 +39,7 @@ evalExpr env (InfixExpr op expr1 expr2) = do
 evalExpr env (AssignExpr OpAssign (LVar var) expr) = do
     stateLookup env var -- crashes if the variable doesn't exist
     e <- evalExpr env expr
-    setVar var e
+    ST $ \s -> (e,updateVar s var e)
 
 evalExpr env (AssignExpr OpAssign (LBracket container keyExp) expr) = do{
 	vector <- evalExpr env container;
@@ -54,10 +54,10 @@ evalExpr env (AssignExpr OpAssign (LBracket container keyExp) expr) = do{
 									e <- evalExpr env expr;
 									if(key==0)
 										then let x = Array ([e]++(drop (key+1) array));
-												in setVar id x;
+												in ST $ \s -> (x, updateVar s id x);
 									else
 										let x = Array ((take key array)++[e]++(drop (key+1) array));
-										in setVar id x;
+										in ST $ \s -> (x, updateVar s id x);
 									}
 				otherwise -> do{
 								e <- evalExpr env expr;
@@ -116,6 +116,8 @@ evalExpr env (CallExpr (VarRef (Id name)) exps) = do {
 	pushScope env;
 	getArgs ids env exps;
 	return <- myEvaluate env sts;
+	
+	
 	popScope env;
 	ST $ \s -> (getReturn(return),s);
 		
@@ -165,7 +167,7 @@ getArgs :: [Id] -> StateT-> [Expression] -> StateTransformer Value
 getArgs [] _ _ = return Nil
 getArgs ((Id id):ids) env (exp:exps) = do
 	x <- evalExpr env exp
-	setVar id x
+	setVar id x;
 	getArgs ids env exps
 	
 pushScope :: StateT -> StateTransformer Value
@@ -486,6 +488,14 @@ varDecl env (VarDecl (Id id) maybeExpr) = do
 
 setVar :: String -> Value -> StateTransformer Value
 setVar var val = ST $ \(st:sts) -> (val, ((insert var val st):sts))
+
+updateVar :: StateT -> String -> Value -> StateT
+updateVar (scope:[]) var val = (insert var val scope):[]
+updateVar (scope:scopes) var val =
+	case Map.lookup var scope of 
+		Just _ -> (insert var val scope):scopes
+		Nothing -> scope:(updateVar scopes var val)
+		
 
 --
 -- Types and boilerplate
