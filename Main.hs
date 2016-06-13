@@ -91,21 +91,21 @@ evalExpr env (UnaryAssignExpr unaryAssignOp (LVar var)) = do
 evalExpr env (CallExpr (VarRef (Id name)) exps) = do{
 	(Function (Id name) ids sts) <- stateLookup env name;
 	ST $ \s -> do{
-		let (ST funcaoLocais) = addLocals env (BlockStmt sts);
-			(_, varLocais) = funcaoLocais env;
-			(ST funcaoGlobais) = addGlobal varLocais (BlockStmt sts);
-			(_, varGlobais) = funcaoGlobais s;
-			(ST funcaoArgs) = mapM (evalExpr env) exps;
+		let (ST funcaoArgs) = mapM (evalExpr env) exps;
 			(params, _) = funcaoArgs s;
 			parametros = fromList (zip (Prelude.map (\(Id a) -> a) ids) (params));
+			(ST funcaoLocais) = addLocals env (BlockStmt sts);
+			(_, varLocais) = funcaoLocais s;
+			(ST funcaoGlobais) = addGlobal s (BlockStmt sts);
+			(_, varGlobais) = funcaoGlobais s;
 			locais = union parametros s;
 			(ST rodarFuncao) = myEvaluate env sts;
 			(val, estadoFinal) = rodarFuncao locais;
 		in do
 			if (isReturn(val))
-				then (getReturn(val), union (difference estadoFinal (union parametros varLocais)) varGlobais)
+				then (getReturn(val), union (intersection (difference estadoFinal parametros) (intersection varLocais varGlobais)) (intersection varGlobais parametros) )
 			else
-				(val, union (difference estadoFinal (union parametros varLocais)) varGlobais)
+				(val, union (intersection (difference estadoFinal (union parametros varLocais)) varGlobais) varGlobais)
 	};
 }
 
