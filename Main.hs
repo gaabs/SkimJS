@@ -103,9 +103,9 @@ evalExpr env (CallExpr (VarRef (Id name)) exps) = do{
 			(val, estadoFinal) = rodarFuncao locais;
 		in do
 			if (isReturn(val))
-				then (getReturn(val), union (difference estadoFinal (union varLocais parametros)) varGlobais)
+				then (getReturn(val), union (difference estadoFinal (union parametros varLocais)) varGlobais)
 			else
-				(val, union (difference estadoFinal (union varLocais parametros)) varGlobais)
+				(val, union (difference estadoFinal (union parametros varLocais)) varGlobais)
 	};
 }
 
@@ -201,11 +201,18 @@ addLocals env (BlockStmt (s:sts))= do
 				addLocals env ifBlock
 				addLocals env (BlockStmt sts)
 			(ForStmt initialize expr1 expr2 stmt) -> do
-				addLocals env stmt
-				addLocals env (BlockStmt sts)
+				case initialize of
+					(ExprInit e) -> do
+						addLocals env (BlockStmt [ExprStmt e])
+						addLocals env stmt
+						addLocals env (BlockStmt sts)
+					_ -> do
+						addLocals env stmt
+						addLocals env (BlockStmt sts)
 			(VarDeclStmt (y:ys)) -> do
 				varDecl env y
-				addLocals env (BlockStmt sts)
+				addLocals env (VarDeclStmt ys)
+				addLocals env (BlockStmt sts)				
 			(ExprStmt (CallExpr nameExp args)) -> do
 				res <- evalExpr env (nameExp)
 				case res of
@@ -237,15 +244,10 @@ addGlobal env (BlockStmt (x:xs)) = do
         (IfSingleStmt expr ifBlock) -> do
             addGlobal env ifBlock
             addGlobal env (BlockStmt xs)
-        (ForStmt initialize expr1 expr2 stmt) -> do
-            case initialize of
-                (ExprInit e) -> do
-                    addGlobal env (BlockStmt [ExprStmt e])
-                    addGlobal env stmt
-                    addGlobal env (BlockStmt xs)
-                _ -> do
-                    addGlobal env stmt
-                    addGlobal env (BlockStmt xs)
+        (ForStmt initialize expr1 expr2 stmt) -> do{
+			addGlobal env stmt;
+			addGlobal env (BlockStmt xs);
+		}
         (ExprStmt (CallExpr nameExp args)) -> do
             res <- evalExpr env (nameExp)
             case res of
