@@ -494,7 +494,11 @@ updateVar (scope:[]) var val = (insert var val scope):[]
 updateVar (scope:scopes) var val =
 	case Map.lookup var scope of 
 		Just _ -> (insert var val scope):scopes
-		Nothing -> scope:(updateVar scopes var val)
+		Nothing -> scope:(setGlobalVar scopes var val)
+		
+setGlobalVar :: StateT -> String -> Value -> StateT
+setGlobalVar (scope:[]) var val = (insert var val scope):[]
+setGlobalVar (scope:scopes) var val = scope:(setGlobalVar scopes var val)
 		
 
 --
@@ -534,7 +538,7 @@ main :: IO ()
 main = do
     --js <- Parser.parseFromFile "Main.js"
     filename <- getLine
-    js <- Parser.parseFromFile filename
+    js <- Parser.parseFromFile "Programs/" ++ filename
     let statements = unJavaScript js
     putStrLn $ "AST: " ++ (show $ statements) ++ "\n"
     putStr $ showResult $ getResult $ evaluate environment statements
