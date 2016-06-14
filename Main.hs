@@ -538,7 +538,7 @@ main :: IO ()
 main = do
     --js <- Parser.parseFromFile "Main.js"
     filename <- getLine
-    js <- Parser.parseFromFile "Programs/" ++ filename
+    js <- Parser.parseFromFile $ "Programs/" ++ filename
     let statements = unJavaScript js
     putStrLn $ "AST: " ++ (show $ statements) ++ "\n"
     putStr $ showResult $ getResult $ evaluate environment statements
