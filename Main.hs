@@ -10,8 +10,6 @@ import Value
 -- Evaluate functions
 --
 
-
-
 evalExpr :: StateT -> Expression -> StateTransformer Value
 evalExpr env (VarRef (Id id)) = stateLookup env id
 evalExpr env (IntLit int) = return $ Int int
@@ -37,7 +35,7 @@ evalExpr env (InfixExpr op expr1 expr2) = do
     v2 <- evalExpr env expr2
     infixOp env op v1 v2
 evalExpr env (AssignExpr OpAssign (LVar var) expr) = do
-    stateLookup env var -- crashes if the variable doesn't exist
+    stateLookup env var
     e <- evalExpr env expr
     ST $ \s -> (e,updateVar s var e)
 
@@ -88,40 +86,13 @@ evalExpr env (UnaryAssignExpr unaryAssignOp (LVar var)) = do
 		PrefixDec -> evalExpr env (AssignExpr OpAssignSub (LVar var) (IntLit 1))
 		PostfixDec -> evalExpr env (AssignExpr OpAssignSub (LVar var) (IntLit 1))
 
-{-
-evalExpr env (CallExpr (VarRef (Id name)) exps) = do{
-	(Function (Id name) ids sts) <- stateLookup env name;
-	ST $ \s -> do{
-		let (ST funcaoLocais) = addLocals env (BlockStmt sts);
-			(_, varLocais) = funcaoLocais env;
-			(ST funcaoGlobais) = addGlobal varLocais (BlockStmt sts);
-			(_, varGlobais) = funcaoGlobais s;
-			(ST funcaoArgs) = mapM (evalExpr env) exps;
-			(params, _) = funcaoArgs s;
-			parametros = fromList (zip (Prelude.map (\(Id a) -> a) ids) (params));
-			locais = union parametros s;
-			(ST rodarFuncao) = myEvaluate env sts;
-			(val, estadoFinal) = rodarFuncao locais;
-		in do
-			if (isReturn(val))
-				then (getReturn(val), union (difference estadoFinal (union varLocais parametros)) varGlobais)
-			else
-				(val, union (difference estadoFinal (union varLocais parametros)) varGlobais)
-	};
-}
--}
-
 evalExpr env (CallExpr (VarRef (Id name)) exps) = do {
 	(Function (Id name) ids sts) <- stateLookup env name; -- crashes if the variable doesn't exist
 	pushScope env;
 	getArgs ids env exps;
-	return <- myEvaluate env sts;
-	
-	
+	return <- myEvaluate env sts;	
 	popScope env;
 	ST $ \s -> (getReturn(return),s);
-		
-	--apagarTemps env ids;
 }
 
 evalExpr env (CallExpr (DotRef e (Id function) ) exps) = do {
@@ -213,78 +184,6 @@ count (String []) = 0
 count (String (e:ex)) = 1 + count(String ex)
 count _ = 0
 
-addLocals :: StateT-> Statement -> StateTransformer Value
-addLocals env (BlockStmt []) = return $ Nil
-addLocals env (VarDeclStmt []) = return $ Nil
-addLocals env (VarDeclStmt (decl:ds)) = do
-	varDecl env decl
-	addLocals env (VarDeclStmt ds)
-addLocals env (BlockStmt (s:sts))= do
-	case s of
-			(IfStmt expr ifBlock elseBlock) -> do
-				addLocals env ifBlock
-				addLocals env elseBlock
-				addLocals env (BlockStmt sts)
-			(IfSingleStmt expr ifBlock) -> do
-				addLocals env ifBlock
-				addLocals env (BlockStmt sts)
-			(ForStmt initialize expr1 expr2 stmt) -> do
-				addLocals env stmt
-				addLocals env (BlockStmt sts)
-			(VarDeclStmt (y:ys)) -> do
-				varDecl env y
-				addLocals env (BlockStmt sts)
-			(ExprStmt (CallExpr nameExp args)) -> do
-				res <- evalExpr env (nameExp)
-				case res of
-					(Vazia _) -> addLocals env (BlockStmt sts)
-					(Function name argsName stmts) -> do
-						addLocals env (BlockStmt stmts)
-						addLocals env (BlockStmt sts)
-					_ -> do
-						addLocals env (BlockStmt sts)
-
-			_ -> addLocals env (BlockStmt sts)
-addLocals env _ = return $ Nil
-
-addGlobal :: StateT-> Statement -> StateTransformer Value
-addGlobal env (BlockStmt []) = return Nil
-addGlobal env (BlockStmt ((ExprStmt (AssignExpr OpAssign (LVar var) expr)):xs)) = do
-    v <- stateLookup env var
-    case v of
-        (Vazia _) -> do
-            evalStmt env (VarDeclStmt [(VarDecl (Id var) (Nothing))])
-            addGlobal env (BlockStmt xs)
-        _ -> addGlobal env (BlockStmt xs)
-addGlobal env (BlockStmt (x:xs)) = do
-    case x of
-        (IfStmt expr ifBlock elseBlock) -> do
-            addGlobal env ifBlock
-            addGlobal env elseBlock
-            addGlobal env (BlockStmt xs)
-        (IfSingleStmt expr ifBlock) -> do
-            addGlobal env ifBlock
-            addGlobal env (BlockStmt xs)
-        (ForStmt initialize expr1 expr2 stmt) -> do
-            case initialize of
-                (ExprInit e) -> do
-                    addGlobal env (BlockStmt [ExprStmt e])
-                    addGlobal env stmt
-                    addGlobal env (BlockStmt xs)
-                _ -> do
-                    addGlobal env stmt
-                    addGlobal env (BlockStmt xs)
-        (ExprStmt (CallExpr nameExp args)) -> do
-            res <- evalExpr env (nameExp)
-            case res of
-                (Vazia _) -> addGlobal env (BlockStmt xs)
-                (Function name argsName stmts) -> do
-                    addGlobal env (BlockStmt stmts)
-                    addGlobal env (BlockStmt xs)
-        _ -> addGlobal env (BlockStmt xs)
-addGlobal env _ = return $ Nil
-
-
 evalStmt :: StateT -> Statement -> StateTransformer Value
 evalStmt env (BlockStmt sts) = myEvaluate env sts;
 evalStmt env EmptyStmt = return Nil
@@ -315,7 +214,6 @@ evalStmt env (WhileStmt expr st) = do {
 		}
 	else return Nil;
 }
-
 
 evalStmt env (ForStmt init (test) (inc) st) = do {
 	case init of
@@ -440,23 +338,11 @@ infixOp env OpLAnd (Bool v1) (Bool v2) = return $ Bool $ v1 && v2
 infixOp env OpLOr  (Bool v1) (Bool v2) = return $ Bool $ v1 || v2
 infixOp env OpEq  (v1) (v2) = return $ Bool $ v1 == v2
 infixOp env OpNEq  (v1) (v2) = return $ Bool $ v1 /= v2
---infixOp env op (Return v1) (v2) = (infixOp env op v1 v2)
---infixOp env op (v1) (Return v2) = (infixOp env op v1 v2)
-
 
 prefixOp :: StateT -> PrefixOp ->  Value -> StateTransformer Value
 prefixOp env PrefixMinus (Int  v) = return $ Int  $ -v
 prefixOp env PrefixPlus (Int  v) = return $ Int  $ v
 prefixOp env PrefixLNot (Bool  v) = return $ Bool  $ not v
-{-
-data PrefixOp = PrefixLNot -- ^ @!@
-              | PrefixBNot -- ^ @~@
-              | PrefixPlus -- ^ @+@
-              | PrefixMinus -- ^ @-@
-              | PrefixTypeof -- ^ @typeof@
-              | PrefixVoid -- ^ @void@
-              | PrefixDelete -- ^ @delete@
--}
 
 --
 -- Environment and auxiliary functions
@@ -500,7 +386,6 @@ setGlobalVar :: StateT -> String -> Value -> StateT
 setGlobalVar (scope:[]) var val = (insert var val scope):[]
 setGlobalVar (scope:scopes) var val = scope:(setGlobalVar scopes var val)
 		
-
 --
 -- Types and boilerplate
 --
