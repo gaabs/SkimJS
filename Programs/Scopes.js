@@ -14,3 +14,17 @@ for(var i = 0; i < 10; i++ ){
     }
     f2();
 }
+
+var x = 0;
+
+function h(){
+	x = 10;
+}
+
+function g(){
+	var x = 5;
+	h();
+}
+
+g();
+x;
